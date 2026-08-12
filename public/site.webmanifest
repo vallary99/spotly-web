@@ -1,0 +1,11 @@
+{
+  "name": "Spotly",
+  "short_name": "Spotly",
+  "icons": [
+    { "src": "/favicon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/favicon-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#C7653A",
+  "background_color": "#F8F5F0",
+  "display": "standalone"
+}

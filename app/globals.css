@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* ---- Spotly brand tokens (from Brand Identity Document v1.1) ---- */
+:root {
+  --terracotta: #C7653A;
+  --olive: #5D6041;
+  --gold: #E8A74A;
+  --warm-brown: #7A3C2C;
+  --warm-clay: #9E6B4A;
+  --cream: #F8F5F0;
+  --surface: #FFFFFF;
+  --text: #43352F;
+  --border: #E8DDD4;
+  --success: #6C8C4E;
+  --warning: #E3A93B;
+  --error: #D65A4A;
+  --radius: 20px;
+}
+
+@theme inline {
+  --color-terracotta: var(--terracotta);
+  --color-olive: var(--olive);
+  --color-gold: var(--gold);
+  --color-warm-brown: var(--warm-brown);
+  --color-warm-clay: var(--warm-clay);
+  --color-cream: var(--cream);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --radius-spotly: var(--radius);
+  --font-display: 'Cinzel', serif;
+  --font-sans: 'Inter', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--cream);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.3px;
+}
+
+/* Hide scrollbars on horizontally-scrolling rails, matching the prototype */
+.h-scroll {
+  scrollbar-width: none;
+}
+.h-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Toast */
+.spotly-toast {
+  transform: translateX(-50%) translateY(20px);
+}
+.spotly-toast.show {
+  transform: translateX(-50%) translateY(0);
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+.bounce {
+  animation: pop 0.35s ease;
+}
