@@ -24,7 +24,7 @@ function ResetPasswordForm() {
       return;
     }
     if (!token) {
-      setError("This reset link is missing its token — use the link from your email directly.");
+      setError("This reset link is missing its token, use the link from your email directly.");
       return;
     }
     setBusy(true);

@@ -24,6 +24,7 @@ const FALLBACK_CATEGORIES = [
   "Cake Decorating",
   "Candle Making",
   "Crafts Studio",
+  "Photography Studio",
   "Art Gallery",
   "Art Studio",
   "Art Installation",
@@ -250,6 +251,7 @@ export default function NewBusinessPage() {
                 value={category}
                 onChange={setCategory}
                 options={[...categories.map((c) => ({ value: c, label: c })), { value: "Other", label: "Other, type your own" }]}
+                searchable
               />
             </Field>
             <Field label="Neighborhood / Area">

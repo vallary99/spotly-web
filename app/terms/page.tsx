@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
-export const metadata = { title: "Terms of Service — Spotly" };
+export const metadata = { title: "Terms of Service, Spotly" };
 
 export default function TermsPage() {
   return (
@@ -28,7 +28,7 @@ export default function TermsPage() {
             <ul className="list-disc space-y-1 pl-5">
               <li>You&apos;re responsible for keeping your login details secure and for activity under your account</li>
               <li>You must provide accurate information when signing up and registering a business</li>
-              <li>One business listing per real business — don&apos;t create duplicate or fake listings</li>
+              <li>One business listing per real business, don&apos;t create duplicate or fake listings</li>
               <li>You must be old enough to legally enter into these terms in your jurisdiction</li>
             </ul>
           </section>
@@ -36,9 +36,9 @@ export default function TermsPage() {
           <section>
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Reviews and content</h2>
             <ul className="list-disc space-y-1 pl-5">
-              <li>Reviews must reflect a genuine visit or experience — no fake reviews, for your own business or anyone else&apos;s</li>
+              <li>Reviews must reflect a genuine visit or experience, no fake reviews, for your own business or anyone else&apos;s</li>
               <li>Business owners can&apos;t review their own business</li>
-              <li>Uploaded photos must be real, and yours to use — reusing someone else&apos;s photos across a different business listing may get the listing flagged and reviewed</li>
+              <li>Uploaded photos must be real, and yours to use, reusing someone else&apos;s photos across a different business listing may get the listing flagged and reviewed</li>
               <li>We may remove content that&apos;s fake, abusive, illegal, or violates these terms, and may suspend accounts or listings that repeatedly do</li>
             </ul>
           </section>
@@ -48,7 +48,7 @@ export default function TermsPage() {
             <ul className="list-disc space-y-1 pl-5">
               <li>The Starter tier is free, with limits on photos, videos, and hosted experiences; Growth and Premium are paid upgrades with higher limits</li>
               <li>Subscription payments are processed via M-Pesa (Safaricom&apos;s Daraja API)</li>
-              <li>If a payment fails or lapses, your listing doesn&apos;t get removed — it reverts to the free Starter tier after a grace period</li>
+              <li>If a payment fails or lapses, your listing doesn&apos;t get removed, it reverts to the free Starter tier after a grace period</li>
               <li>Photos and videos go through an automated quality check before publishing, and may be spot-checked afterward</li>
               <li>We may offer promotional discounts or free trials at our discretion; these don&apos;t create an ongoing entitlement beyond what&apos;s stated when offered</li>
             </ul>
@@ -58,7 +58,7 @@ export default function TermsPage() {
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Experiences</h2>
             <p>
               Hosting an experience (an event, class, or time-bound activity) requires a Business Account.
-              You&apos;re responsible for the accuracy of what you list — date, time, price, and description —
+              You&apos;re responsible for the accuracy of what you list, date, time, price, and description,
               and for actually delivering what you advertise. Spotly isn&apos;t a party to the transaction between
               a host and an attendee beyond facilitating discovery.
             </p>
@@ -99,12 +99,6 @@ export default function TermsPage() {
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Contact</h2>
             <p>Questions about these terms: <strong>hello@spotly.co.ke</strong></p>
           </section>
-
-          <p className="mt-8 rounded-2xl border border-border bg-cream p-4 text-xs text-warm-clay">
-            This is a working draft covering the situations Spotly actually handles today — it hasn&apos;t been
-            reviewed by a lawyer yet. Have it checked before relying on it for a real launch, particularly the
-            payment and liability sections.
-          </p>
         </div>
       </main>
       <Footer />

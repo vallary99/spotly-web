@@ -178,6 +178,7 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-8">
             <SubscriptionPanel business={business} tiers={tiers} subStatus={subStatus} onUpgraded={load} showToast={showToast} />
+            <SupportContact />
             <DangerZone business={business} />
           </div>
         </div>
@@ -334,6 +335,7 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
               { value: "Other", label: "Other, type your own" },
             ]}
             className="w-full"
+            searchable
           />
         </label>
       </div>
@@ -499,7 +501,7 @@ function VideoSection({
     try {
       const durationSeconds = Math.round(await getDuration(file));
       if (durationSeconds > maxSeconds) {
-        setError(`This video is ${durationSeconds}s — your ${tier} tier's limit is ${maxSeconds}s.`);
+        setError(`This video is ${durationSeconds}s, your ${tier} tier's limit is ${maxSeconds}s.`);
         return;
       }
       const ext = file.name.split(".").pop() || "mp4";
@@ -635,7 +637,20 @@ function MediaSection({
                 aria-label="View full photo"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={m.url} alt="" className="h-20 w-full rounded-lg object-cover transition group-hover:brightness-90" />
+                <img
+                  src={m.url}
+                  alt=""
+                  className="h-20 w-full rounded-lg object-cover transition group-hover:brightness-90"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (fallback) fallback.style.display = "flex";
+                  }}
+                />
+                <div className="hidden h-20 w-full flex-col items-center justify-center gap-1 rounded-lg bg-cream text-warm-clay">
+                  <i className="bi bi-image text-lg" />
+                  <span className="text-[0.6rem]">Unavailable</span>
+                </div>
               </button>
               <button
                 onClick={async (e) => {
@@ -695,7 +710,20 @@ function MediaSection({
                   aria-label="View full photo"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url} alt="" className="h-20 w-full rounded-lg object-cover opacity-70" />
+                  <img
+                    src={m.url}
+                    alt=""
+                    className="h-20 w-full rounded-lg object-cover opacity-70"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                      if (fallback) fallback.style.display = "flex";
+                    }}
+                  />
+                  <div className="hidden h-20 w-full flex-col items-center justify-center gap-1 rounded-lg bg-cream text-warm-clay opacity-70">
+                    <i className="bi bi-image text-lg" />
+                    <span className="text-[0.6rem]">Unavailable</span>
+                  </div>
                 </button>
                 <button
                   onClick={async (e) => {
@@ -758,6 +786,7 @@ function ExperienceManager({
   const [uploadingCover, setUploadingCover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [brokenExpThumbs, setBrokenExpThumbs] = useState<Set<string>>(new Set());
 
   const live = experiences.filter((e) => !e.isExpired);
   const cap = tiers?.[tier]?.concurrentExperiences;
@@ -944,7 +973,7 @@ function ExperienceManager({
             placeholder="Ticketing link (optional)"
             className={inputClass}
           />
-          <input required type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (KES — enter 0 if free)" className={inputClass} />
+          <input required type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (KES, enter 0 if free)" className={inputClass} />
           {error && <p className="text-sm text-error">{error}</p>}
           <button disabled={busy || uploadingCover} className="w-full rounded-full bg-terracotta py-2.5 text-sm font-semibold text-white disabled:opacity-60">
             {busy ? "Saving…" : editingId ? "Save Experience" : "Publish Experience"}
@@ -959,7 +988,16 @@ function ExperienceManager({
           {experiences.map((exp) => (
             <div key={exp.id} className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm">
               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-cream">
-                {exp.images[0] && <Image src={exp.images[0]} alt="" fill sizes="48px" className="object-cover" />}
+                {exp.images[0] && !brokenExpThumbs.has(exp.id) && (
+                  <Image
+                    src={exp.images[0]}
+                    alt=""
+                    fill
+                    sizes="48px"
+                    className="object-cover"
+                    onError={() => setBrokenExpThumbs((prev) => new Set(prev).add(exp.id))}
+                  />
+                )}
               </div>
               <div className="flex-1">
                 <div className="font-semibold">{exp.title}</div>
@@ -1054,7 +1092,7 @@ function SubscriptionPanel({
     setTrialBusy(true);
     try {
       await api.subscriptions.startTrial(business.id);
-      showToast("Trial started — enjoy the extra room!");
+      showToast("Trial started, enjoy the extra room!");
       onUpgraded();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Couldn't start the trial.");
@@ -1081,7 +1119,7 @@ function SubscriptionPanel({
         <div className="mb-5 rounded-2xl border border-olive bg-[rgba(93,96,65,0.06)] p-4">
           <p className="text-sm font-semibold text-olive">
             <i className="bi bi-stars mr-1.5" />
-            Trialing {subStatus.activeTrial.tier === "GROWTH" ? "Growth" : "Premium"} — {daysLeft} day{daysLeft === 1 ? "" : "s"} left
+            Trialing {subStatus.activeTrial.tier === "GROWTH" ? "Growth" : "Premium"}, {daysLeft} day{daysLeft === 1 ? "" : "s"} left
           </p>
           <p className="mt-1 text-xs text-warm-clay">
             Your trial reverts to Starter automatically when it ends, unless you upgrade for real before then.
@@ -1209,6 +1247,27 @@ const inputClass =
   "w-full rounded-2xl border border-border bg-cream px-4 py-2.5 text-sm outline-none focus:border-terracotta";
 
 // ---------- Danger zone: delete business ----------
+
+// Business-account customer support contact, only ever rendered inside
+// the dashboard (i.e. only surfaced to users who have a Business
+// Account), separate from the general hello@ address in the footer.
+function SupportContact() {
+  return (
+    <div className="rounded-spotly border border-border bg-surface p-6">
+      <h2 className="mb-1 text-xl text-warm-brown">Need help?</h2>
+      <p className="mb-3 text-sm text-warm-clay">
+        Questions about your listing, subscription, or payments? Our support team is here for business
+        accounts.
+      </p>
+      <a
+        href="mailto:support@spotly.co.ke"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta hover:underline"
+      >
+        <i className="bi bi-envelope" /> support@spotly.co.ke
+      </a>
+    </div>
+  );
+}
 
 function DangerZone({ business }: { business: Business }) {
   const router = useRouter();

@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
-export const metadata = { title: "Privacy Policy — Spotly" };
+export const metadata = { title: "Privacy Policy, Spotly" };
 
 export default function PrivacyPage() {
   return (
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         <div className="prose-legal space-y-6 text-sm leading-relaxed text-text">
           <p>
             This policy explains what information Spotly collects, how it&apos;s used, and the choices you have.
-            It applies to everyone using Spotly — people browsing and saving places, and businesses listing on
+            It applies to everyone using Spotly, people browsing and saving places, and businesses listing on
             the platform.
           </p>
 
@@ -22,9 +22,9 @@ export default function PrivacyPage() {
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Information we collect</h2>
             <p className="mb-2 font-semibold">From everyone with an account:</p>
             <ul className="mb-3 list-disc space-y-1 pl-5">
-              <li>Name and email address (or your Google/Apple account info, if you sign in that way)</li>
+              <li>Name and email address (or your Google account info, if you sign in that way)</li>
               <li>Businesses you save and reviews you write</li>
-              <li>Basic usage data — which pages and businesses you view, so we can show accurate view counts to businesses and improve what we surface to you</li>
+              <li>Basic usage data, which pages and businesses you view, so we can show accurate view counts to businesses and improve what we surface to you</li>
             </ul>
             <p className="mb-2 font-semibold">Additionally, from business owners:</p>
             <ul className="mb-3 list-disc space-y-1 pl-5">
@@ -50,10 +50,10 @@ export default function PrivacyPage() {
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Who we share it with</h2>
             <p className="mb-2">We use a small number of third-party services to actually run Spotly:</p>
             <ul className="list-disc space-y-1 pl-5">
-              <li><strong>Safaricom (Daraja/M-Pesa)</strong> — to process subscription payments</li>
-              <li><strong>Resend</strong> — to deliver account emails</li>
-              <li><strong>Cloudinary or an S3-compatible provider</strong> — to store uploaded photos and videos</li>
-              <li><strong>Google / Apple</strong> — only if you choose to sign in with one of those accounts</li>
+              <li><strong>Safaricom (Daraja/M-Pesa)</strong>, to process subscription payments</li>
+              <li><strong>Resend</strong>, to deliver account emails</li>
+              <li><strong>Cloudinary or an S3-compatible provider</strong>, to store uploaded photos and videos</li>
+              <li><strong>Google</strong>, only if you choose to sign in with your Google account</li>
             </ul>
             <p className="mt-2">
               Each only receives what it needs to do its job (e.g. Safaricom receives payment details, not your
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
             <p>
               Under Kenya&apos;s Data Protection Act (2019), you have the right to access, correct, or request
               deletion of your personal data. You can delete your saved places and reviews yourself from your
-              account; for anything else — including a full account deletion — contact us at the email below.
+              account; for anything else, including a full account deletion, contact us at the email below.
               Business owners can delete their entire business listing at any time from their dashboard.
             </p>
           </section>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
 
           <p className="mt-8 rounded-2xl border border-border bg-cream p-4 text-xs text-warm-clay">
             This is a working draft meant to give a clear, honest account of what Spotly actually does with your
-            data — it hasn&apos;t been reviewed by a lawyer yet. Have it checked against Kenya&apos;s Data
+            data, it hasn&apos;t been reviewed by a lawyer yet. Have it checked against Kenya&apos;s Data
             Protection Act before relying on it for a real launch.
           </p>
         </div>

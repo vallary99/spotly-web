@@ -21,6 +21,11 @@ export function Lightbox({
   const [idx, setIdx] = useState(startIndex);
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  // Tracks which images in this set failed to load (e.g. a dead/stale
+  // storage URL) so we can show a clear placeholder instead of either a
+  // browser broken-image icon or, worse, letting next/image's fetch
+  // error bubble up as an unhandled one.
+  const [brokenIdx, setBrokenIdx] = useState<Set<number>>(new Set());
   const pinchState = useRef<{ startDist: number; startScale: number } | null>(null);
   const panState = useRef<{ startX: number; startY: number; origin: { x: number; y: number } } | null>(null);
   const swipeStartX = useRef<number | null>(null);
@@ -149,7 +154,22 @@ export function Lightbox({
           className="relative h-full w-full transition-transform duration-150"
           style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})` }}
         >
-          <Image src={images[idx]} alt={alt} fill sizes="90vw" priority className="object-contain" />
+          {brokenIdx.has(idx) ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-white/60">
+              <i className="bi bi-image text-4xl" />
+              <span className="text-sm">This photo isn&apos;t available.</span>
+            </div>
+          ) : (
+            <Image
+              src={images[idx]}
+              alt={alt}
+              fill
+              sizes="90vw"
+              priority
+              className="object-contain"
+              onError={() => setBrokenIdx((prev) => new Set(prev).add(idx))}
+            />
+          )}
         </div>
       </div>
     </div>

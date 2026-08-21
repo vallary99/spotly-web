@@ -103,12 +103,6 @@ export function AuthModal() {
             >
               <i className="bi bi-google" /> Continue with Google
             </a>
-            <a
-              href={`${API_URL}/auth/apple`}
-              className="mb-2.5 flex w-full items-center justify-center gap-2.5 rounded-full border border-border bg-surface py-3 text-sm font-semibold text-text transition hover:bg-cream"
-            >
-              <i className="bi bi-apple" /> Continue with Apple
-            </a>
             <button
               type="button"
               onClick={() => setMode("email-signup")}
@@ -207,7 +201,7 @@ export function AuthModal() {
             {resetSent ? (
               <>
                 <p className="mb-6 text-sm text-warm-clay">
-                  If <span className="font-semibold text-text">{email}</span> has an account, we&apos;ve sent a reset link — check your inbox.
+                  If <span className="font-semibold text-text">{email}</span> has an account, we&apos;ve sent a reset link, check your inbox.
                 </p>
                 <button type="button" onClick={handleClose} className="w-full rounded-full border border-terracotta bg-terracotta py-3 text-sm font-semibold text-white">
                   Done

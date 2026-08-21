@@ -53,6 +53,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingSuccessCb, setPendingSuccessCb] = useState<(() => void) | null>(null);
   const { showToast } = useToast();
 
+  // Self-heals a stale token: if someone's stored JWT predates them
+  // registering a business (e.g. a refreshAuth() call after business
+  // creation silently failed on a flaky connection, or a business was
+  // granted through another tab/device), businessId would otherwise sit
+  // wrong until their next explicit login — showing "List Your
+  // Business" to someone who already has a business account. Runs once
+  // per session, only when logged in with no businessId yet, so it
+  // costs a confirming call to non-owners exactly once and nothing at
+  // all to owners whose token is already correct.
+  useEffect(() => {
+    if (!user || businessId) return;
+    api.auth
+      .refresh()
+      .then((res) => {
+        setToken(res.accessToken);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(res.user));
+        setUser(res.user);
+        setBusinessId(decodeToken()?.businessId ?? null);
+      })
+      .catch(() => {
+        // Invalid/expired token: the request wrapper's own 401 handling
+        // (spotly:unauthorized) already covers logging the person out.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // lib/api.ts dispatches this the moment any request comes back 401 —
   // the stored token is invalid/expired (commonly from testing across
   // restarts, or a token that outlived a dev database reset). Without
@@ -95,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBusinessId(null);
   }, []);
 
-  // Used by /auth/callback after Google/Apple redirect back with a token
+  // Used by /auth/callback after Google redirect back with a token
   // in the URL, the backend only sends a JWT (via redirect), not a full
   // user object like the email/password flows get, so this decodes the
   // token client-side to reconstruct enough of a User to populate the UI.

@@ -66,7 +66,7 @@ const QUICK_FILTERS = [
   { label: "Dance", icon: "bi-music-note-beamed", categories: ["Dance Class", "Dance Studio", "Social Dancing Venue", "Dance Performance Venue"] },
   { label: "Culture & Heritage", icon: "bi-bank", categories: ["Museum", "Cultural Centre", "Heritage Site", "Cultural Experience"] },
   { label: "Art & Galleries", icon: "bi-easel", categories: ["Art Gallery", "Art Studio", "Art Installation", "Exhibition Space"] },
-  { label: "Creative Boost", icon: "bi-palette", categories: ["Pottery Studio", "Painting Studio", "Cake Decorating", "Candle Making", "Crafts Studio"] },
+  { label: "Creative Boost", icon: "bi-palette", categories: ["Pottery Studio", "Painting Studio", "Cake Decorating", "Candle Making", "Crafts Studio", "Photography Studio"] },
 ];
 
 function filterOpenNow(list: Business[]): Business[] {
@@ -201,7 +201,7 @@ export default function HomePage() {
               Discover What&apos;s Happening Nearby
             </h1>
             <p className="mb-7 max-w-lg text-lg opacity-92 max-md:mb-5 max-md:text-base">
-              The best cafés, nights out, and hidden gems in Nairobi — found by the people who live here, not an algorithm guessing.
+              The best cafés, nights out, and hidden gems in Nairobi, found by the people who live here, not an algorithm guessing.
             </p>
 
             {/* Nearby / Open Now / Hidden Gems — where "Explore Nearby"

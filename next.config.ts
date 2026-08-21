@@ -32,6 +32,11 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.s3.amazonaws.com", pathname: "/**" },
       { protocol: "https", hostname: "*.r2.dev", pathname: "/**" },
       { protocol: "https", hostname: "*.r2.cloudflarestorage.com", pathname: "/**" },
+      // Cloudinary, the current storage backend (see spotly-api's
+      // MediaService/StorageService) — all uploaded photos and videos
+      // are served from this single fixed hostname regardless of cloud
+      // name, so no wildcard is needed here.
+      { protocol: "https", hostname: "res.cloudinary.com", pathname: "/**" },
     ],
   },
 };

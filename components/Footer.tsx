@@ -17,6 +17,7 @@ export function Footer() {
       <div className="mt-3 flex justify-center gap-4 text-xs">
         <Link href="/privacy" className="hover:text-terracotta">Privacy Policy</Link>
         <Link href="/terms" className="hover:text-terracotta">Terms of Service</Link>
+        <a href="mailto:hello@spotly.co.ke" className="hover:text-terracotta">hello@spotly.co.ke</a>
       </div>
     </footer>
   );
