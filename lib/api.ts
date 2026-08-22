@@ -123,6 +123,13 @@ export interface Business {
   discountPercent?: number;
   isSuspended?: boolean;
   isHiddenGem?: boolean;
+  // Owner-chosen photo id to use as the card/homepage thumbnail; null
+  // or absent means "use the default" (oldest approved photo). The API
+  // already reorders `media` to put this photo first when set, so most
+  // UI can just keep reading media[0] — this field is mainly needed by
+  // the dashboard's "set as cover" control to know which one is
+  // currently selected.
+  coverMediaId?: string | null;
   // Owner-only metrics — only present in the API response when the
   // requester is the business's own owner (see business.service.ts).
   // Never render these on public cards/pages.
@@ -235,6 +242,11 @@ export const api = {
       request<Business>("/businesses", { method: "POST", body: JSON.stringify(dto) }),
     update: (id: string, dto: Record<string, unknown>) =>
       request<Business>(`/businesses/${id}`, { method: "PUT", body: JSON.stringify(dto) }),
+    setCoverPhoto: (id: string, mediaId: string | null) =>
+      request<{ coverMediaId: string | null }>(`/businesses/${id}/cover-photo`, {
+        method: "PATCH",
+        body: JSON.stringify({ mediaId }),
+      }),
     remove: (id: string) => request(`/businesses/${id}`, { method: "DELETE" }),
     categories: () => request<string[]>("/businesses/categories", { auth: false }),
   },

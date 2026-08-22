@@ -23,6 +23,13 @@ const ALLOWED_IMAGE_HOSTS = [
   /(^|\.)s3\.amazonaws\.com$/,
   /(^|\.)r2\.dev$/,
   /(^|\.)r2\.cloudflarestorage\.com$/,
+  // Cloudinary — the current storage backend (see spotly-api's
+  // MediaService/StorageService). Missing here meant every business
+  // photo silently failed this safety check and rendered as a blank
+  // card, even though next.config.ts's remotePatterns already allowed
+  // the hostname — this list is a second, separate gate and had gone
+  // stale after the move to Cloudinary.
+  /^res\.cloudinary\.com$/,
 ];
 
 export function isAllowedImageUrl(url: string): boolean {

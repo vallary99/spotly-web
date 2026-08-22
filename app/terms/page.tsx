@@ -46,7 +46,7 @@ export default function TermsPage() {
           <section>
             <h2 className="mb-2 text-lg font-semibold text-warm-brown">Business listings and subscriptions</h2>
             <ul className="list-disc space-y-1 pl-5">
-              <li>The Starter tier is free, with limits on photos, videos, and hosted experiences; Growth and Premium are paid upgrades with higher limits</li>
+              <li>The Free package has limits on photos, videos, and hosted experiences; Featured and Premium are paid upgrades with higher limits</li>
               <li>Subscription payments are processed via M-Pesa (Safaricom&apos;s Daraja API)</li>
               <li>If a payment fails or lapses, your listing doesn&apos;t get removed, it reverts to the free Starter tier after a grace period</li>
               <li>Photos and videos go through an automated quality check before publishing, and may be spot-checked afterward</li>

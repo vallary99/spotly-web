@@ -10,8 +10,28 @@ import { useToast } from "@/components/ToastContext";
 import { api, ApiError, type Business, type Experience, type Media } from "@/lib/api";
 import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
+import { normalizeKenyanMsisdn } from "@/lib/phone";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// Package display names — kept separate from the underlying tier enum
+// values (STARTER/GROWTH/PREMIUM), which stay as-is in the API/DB.
+// Renaming the enum itself would mean a migration touching every
+// existing business's `tier` column plus every Payment/trial row that
+// references it, for a purely cosmetic rename; this mapping is the
+// cheaper, safer way to show "Free"/"Featured"/"Premium" everywhere.
+function tierLabel(tier: string): string {
+  switch (tier) {
+    case "STARTER":
+      return "Free";
+    case "GROWTH":
+      return "Featured";
+    case "PREMIUM":
+      return "Premium";
+    default:
+      return tier;
+  }
+}
 
 // Same list as the registration form (app/business/new/page.tsx) — kept
 // in sync manually since there's no shared constants file yet.
@@ -154,7 +174,7 @@ export default function DashboardPage() {
         <div className="mb-8 grid grid-cols-3 gap-4 max-md:grid-cols-1">
           <StatCard label="Profile views (30d)" value={business.profileViews ?? 0} icon="bi-eye" />
           <StatCard label="Saves this month" value={business.savesCount ?? 0} icon="bi-heart" />
-          <StatCard label="Current tier" value={business.tier} icon="bi-award" />
+          <StatCard label="Current tier" value={tierLabel(business.tier)} icon="bi-award" />
         </div>
 
         {subStatus?.shouldPromptUpgrade && subStatus.upgradeMessage && (
@@ -166,7 +186,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-[1fr_360px] gap-8 max-md:grid-cols-1">
           <div className="space-y-8">
             <ProfileEditor business={business} onSaved={load} />
-            <MediaSection businessId={businessId} media={business.media || []} tier={business.tier} tiers={tiers} onChanged={load} />
+            <MediaSection businessId={businessId} media={business.media || []} coverMediaId={business.coverMediaId ?? null} tier={business.tier} tiers={tiers} onChanged={load} />
             <VideoSection businessId={businessId} media={business.media || []} tier={business.tier} tiers={tiers} onChanged={load} />
             <ExperienceManager
               businessId={businessId}
@@ -573,18 +593,21 @@ function VideoSection({
 function MediaSection({
   businessId,
   media,
+  coverMediaId,
   tier,
   tiers,
   onChanged,
 }: {
   businessId: string;
   media: Media[];
+  coverMediaId: string | null;
   tier: string;
   tiers: Record<string, TierLimits> | null;
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [coverBusyId, setCoverBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [flaggedLightboxSrc, setFlaggedLightboxSrc] = useState<string | null>(null);
@@ -592,6 +615,24 @@ function MediaSection({
   const photos = media.filter((m) => m.type === "PHOTO" && m.status === "APPROVED");
   const flaggedPhotos = media.filter((m) => m.type === "PHOTO" && m.status === "FLAGGED");
   const limit = tiers?.[tier]?.photos ?? 0;
+  // No explicit choice made yet means the default cover is whichever
+  // photo is first in this array — the API already orders it that way
+  // (oldest-uploaded first, or the chosen cover if one's set — see
+  // BusinessService.attachRatingsAndStripMetrics).
+  const effectiveCoverId = coverMediaId ?? photos[0]?.id ?? null;
+
+  const handleSetCover = async (mediaId: string) => {
+    setCoverBusyId(mediaId);
+    try {
+      await api.businesses.setCoverPhoto(businessId, mediaId);
+      showToast("Cover photo updated.");
+      onChanged();
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't set that as the cover photo.");
+    } finally {
+      setCoverBusyId(null);
+    }
+  };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -652,6 +693,24 @@ function MediaSection({
                   <span className="text-[0.6rem]">Unavailable</span>
                 </div>
               </button>
+              {m.id === effectiveCoverId ? (
+                <span className="absolute left-1 top-1 flex items-center gap-1 rounded-full bg-terracotta px-1.5 py-0.5 text-[0.6rem] font-semibold text-white">
+                  <i className="bi bi-star-fill" /> Cover
+                </span>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSetCover(m.id);
+                  }}
+                  disabled={coverBusyId === m.id}
+                  className="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(67,53,47,0.75)] text-xs text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-100"
+                  aria-label="Set as cover photo"
+                  title="Set as cover photo"
+                >
+                  <i className={coverBusyId === m.id ? "bi bi-hourglass-split" : "bi bi-star"} />
+                </button>
+              )}
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -1069,6 +1128,11 @@ function SubscriptionPanel({
 
   const handleUpgrade = async () => {
     if (!tiers) return;
+    const phoneNumber = normalizeKenyanMsisdn(phone);
+    if (!phoneNumber) {
+      setError("Enter a valid Safaricom number to receive the M-Pesa prompt, e.g. 0712345678.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -1077,7 +1141,7 @@ function SubscriptionPanel({
       // the business's discount, not trusted from this client value —
       // see PaymentService.initiate).
       const amount = tiers[targetTier].priceKes;
-      const res = await api.payments.initiate({ businessId: business.id, purpose: "SUBSCRIPTION", targetTier, amount, phoneNumber: phone });
+      const res = await api.payments.initiate({ businessId: business.id, purpose: "SUBSCRIPTION", targetTier, amount, phoneNumber });
       setPaymentId(res.payment.id);
       setStatus("PENDING");
       showToast(res.simulated ? "Simulated STK Push sent (no real M-Pesa credentials configured)." : "Check your phone for the M-Pesa prompt.");
@@ -1109,7 +1173,7 @@ function SubscriptionPanel({
     <div className="rounded-spotly border border-border bg-surface p-6">
       <h2 className="mb-1 text-xl text-warm-brown">Subscription</h2>
       <p className="mb-4 text-sm text-warm-clay">
-        Currently on <span className="font-semibold text-text">{business.tier}</span>
+        Currently on <span className="font-semibold text-text">{tierLabel(business.tier)}</span>
         {business.isGrandfathered && " · Grandfathered pricing"}
         {!!business.discountPercent && ` · ${business.discountPercent}% off`}
       </p>
@@ -1119,10 +1183,10 @@ function SubscriptionPanel({
         <div className="mb-5 rounded-2xl border border-olive bg-[rgba(93,96,65,0.06)] p-4">
           <p className="text-sm font-semibold text-olive">
             <i className="bi bi-stars mr-1.5" />
-            Trialing {subStatus.activeTrial.tier === "GROWTH" ? "Growth" : "Premium"}, {daysLeft} day{daysLeft === 1 ? "" : "s"} left
+            Trialing {tierLabel(subStatus.activeTrial.tier)}, {daysLeft} day{daysLeft === 1 ? "" : "s"} left
           </p>
           <p className="mt-1 text-xs text-warm-clay">
-            Your trial reverts to Starter automatically when it ends, unless you upgrade for real before then.
+            Your trial reverts to the Free package automatically when it ends, unless you upgrade for real before then.
           </p>
         </div>
       )}
@@ -1135,7 +1199,7 @@ function SubscriptionPanel({
         <div className="mb-5 rounded-2xl border border-terracotta bg-[rgba(199,101,58,0.06)] p-4">
           <p className="mb-1 text-sm font-semibold text-terracotta">
             <i className="bi bi-gift mr-1.5" />
-            Try {subStatus.trialOffer.tier === "GROWTH" ? "Growth" : "Premium"} for free
+            Try {tierLabel(subStatus.trialOffer.tier)} for free
           </p>
           <p className="mb-3 text-xs text-warm-clay">
             {subStatus.trialOffer.days} days, full access, no payment required.
@@ -1171,13 +1235,13 @@ function SubscriptionPanel({
                 >
                   {!!business.discountPercent && (
                     <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-olive px-2.5 py-1 text-xs font-semibold text-white">
-                      <i className="bi bi-tag" /> Try {tierKey === "GROWTH" ? "Growth" : "Premium"} for {business.discountPercent}% off
+                      <i className="bi bi-tag" /> Try {tierLabel(tierKey)} for {business.discountPercent}% off
                     </span>
                   )}
                   <div className="mb-2 flex items-center justify-between">
                     <span className="flex items-center gap-2 font-semibold text-warm-brown">
                       {selected && <i className="bi bi-check-circle-fill text-terracotta" />}
-                      {tierKey === "GROWTH" ? "🌱 Growth" : "✨ Premium"}
+                      {tierKey === "GROWTH" ? "🌟 Featured" : "✨ Premium"}
                     </span>
                     <span className="text-sm font-semibold text-warm-brown">
                       {t ? (
@@ -1222,15 +1286,23 @@ function SubscriptionPanel({
           </div>
           <label className="mb-3 block">
             <span className="mb-1 block text-xs font-semibold text-warm-clay">M-Pesa phone number</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="254712345678" className={inputClass} />
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="254712345678"
+              className={inputClass}
+            />
+            {phone.trim() && !normalizeKenyanMsisdn(phone) && (
+              <span className="mt-1 block text-xs text-error">Enter a valid Safaricom number, e.g. 0712345678.</span>
+            )}
           </label>
           {error && <p className="mb-3 text-sm text-error">{error}</p>}
           <button
             onClick={handleUpgrade}
-            disabled={busy || !phone || (status === "PENDING")}
+            disabled={busy || !normalizeKenyanMsisdn(phone) || status === "PENDING"}
             className="w-full rounded-full bg-terracotta py-2.5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {status === "PENDING" ? "Waiting for confirmation…" : busy ? "Starting…" : `Upgrade to ${targetTier === "GROWTH" ? "Growth" : "Premium"} via M-Pesa`}
+            {status === "PENDING" ? "Waiting for confirmation…" : busy ? "Starting…" : `Upgrade to ${tierLabel(targetTier)} via M-Pesa`}
           </button>
           {status && (
             <p className="mt-3 text-center text-xs text-warm-clay">
