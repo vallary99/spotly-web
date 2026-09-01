@@ -5,11 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
+import { api, ApiError } from "@/lib/api";
 
 export function Navbar() {
-  const { authed, businessId, openAuthModal, logout } = useAuth();
+  const { authed, user, businessId, openAuthModal, logout } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,6 +23,20 @@ export function Navbar() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
+
+  const handleResetPassword = async () => {
+    if (!user?.email || resetBusy) return;
+    setResetBusy(true);
+    try {
+      await api.auth.forgotPassword(user.email);
+      showToast(`Password reset link sent to ${user.email}.`);
+      setProfileOpen(false);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't send that reset link, try again.");
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   const handleListBusiness = () => {
     if (!authed) {
@@ -58,7 +76,14 @@ export function Navbar() {
             <i className="bi bi-person-circle" />
           </button>
           {profileOpen && authed && (
-            <div className="absolute right-0 top-12 w-44 rounded-2xl border border-border bg-surface p-2 shadow-[0_18px_40px_rgba(67,53,47,0.14)]">
+            <div className="absolute right-0 top-12 w-52 rounded-2xl border border-border bg-surface p-2 shadow-[0_18px_40px_rgba(67,53,47,0.14)]">
+              <button
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm text-text hover:bg-cream disabled:opacity-60"
+                onClick={handleResetPassword}
+                disabled={resetBusy}
+              >
+                <i className="bi bi-key mr-2" /> {resetBusy ? "Sending…" : "Reset password"}
+              </button>
               <button
                 className="block w-full rounded-lg px-3 py-2 text-left text-sm text-error hover:bg-cream"
                 onClick={() => {

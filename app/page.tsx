@@ -6,6 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { SectionHeader } from "@/components/SectionHeader";
 import { BusinessCard } from "@/components/BusinessCard";
+import { BusinessCardRowSkeleton } from "@/components/Skeleton";
 import { ExperienceCard } from "@/components/ExperienceCard";
 import { Select } from "@/components/Select";
 import { api, type HomeResponse, type Business } from "@/lib/api";
@@ -50,24 +51,12 @@ const META_FILTERS = [
 // META_FILTERS above instead, on its own row, exactly as requested.
 // Ordered most to least popular for a Nairobi audience (food and going-out
 // categories lead, niche hobby/craft categories trail).
-const QUICK_FILTERS = [
-  { label: "Restaurants & Cafés", icon: "bi-egg-fried", categories: ["Restaurant", "Cafe", "Bakery", "Diner", "Specialty Food Spot"] },
-  { label: "Platters & Buffets", icon: "bi-basket2", categories: ["Buffet", "Sharing Platters Spot", "Nyama Choma Spot", "Choma Base", "Street Food", "Group Dining Venue"] },
-  { label: "Drinks & Cocktails", icon: "bi-cup-straw", categories: ["Cocktail Bar", "Wine Bar", "Brewery", "Specialty Drinks Spot"] },
-  { label: "Nightlife", icon: "bi-moon-stars", categories: ["Nightclub", "Lounge", "Late-Night Venue"] },
-  { label: "Beauty & Wellness", icon: "bi-flower2", categories: ["Spa", "Massage", "Fitness", "Yoga Studio", "Salon", "Wellness Centre"] },
-  { label: "Shopping", icon: "bi-bag", categories: ["Antique Store", "Farmers Market", "Thrift Store", "Boutique"] },
-  { label: "Wildlife & Nature", icon: "bi-tree", categories: ["Scenic View Point", "Picnic Spot", "Hiking Trail", "Camping Site", "Garden", "Park"] },
-  { label: "Live Music & Karaoke", icon: "bi-mic", categories: ["Live Music Venue", "Acoustic Session Venue", "Karaoke Bar"] },
-  { label: "Adrenaline Boost", icon: "bi-lightning-charge", categories: ["Go-Karting", "Paintball", "Ziplining", "Climbing Gym", "Roller Skating Rink", "Ice Skating Rink"] },
-  { label: "Gaming", icon: "bi-controller", categories: ["Arcade", "VR Gaming", "Gaming Lounge", "Esports Venue", "Simulator Experience"] },
-  { label: "Sports", icon: "bi-trophy", categories: ["Sports Ground", "Training Facility", "Sports Court", "Swimming Pool"] },
-  { label: "Workshops & Classes", icon: "bi-mortarboard", categories: ["Cooking Class", "Educational Workshop", "Demonstration Experience"] },
-  { label: "Dance", icon: "bi-music-note-beamed", categories: ["Dance Class", "Dance Studio", "Social Dancing Venue", "Dance Performance Venue"] },
-  { label: "Culture & Heritage", icon: "bi-bank", categories: ["Museum", "Cultural Centre", "Heritage Site", "Cultural Experience"] },
-  { label: "Art & Galleries", icon: "bi-easel", categories: ["Art Gallery", "Art Studio", "Art Installation", "Exhibition Space"] },
-  { label: "Creative Boost", icon: "bi-palette", categories: ["Pottery Studio", "Painting Studio", "Cake Decorating", "Candle Making", "Crafts Studio", "Photography Studio"] },
-];
+// The category-group quick filters (Restaurants & Cafés, Adrenaline
+// Boost, etc.) used to be hardcoded here. They're now admin-managed
+// (Category/QuickFilterGroup tables, editable from spotly-admin's
+// Configuration page) and come from GET /home's `quickFilters` field
+// instead, so a mapping change there shows up live without a frontend
+// deploy. See `data?.quickFilters` below.
 
 function filterOpenNow(list: Business[]): Business[] {
   return list.filter((b) => computeOpenStatus(b.hours)?.open === true);
@@ -76,9 +65,9 @@ function filterOpenNow(list: Business[]): Business[] {
 export default function HomePage() {
   const [data, setData] = useState<HomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  // activeCategory: single-select among the 16 QUICK_FILTERS groups
-  // (null = no category filter). activeMeta: independent toggles for
-  // Nearby/Open Now/Hidden Gems — a Set so any combination of them can
+  // activeCategory: single-select among the admin-managed quick filter
+  // groups from GET /home's `quickFilters` (null = no category filter).
+  // activeMeta: independent toggles for Nearby/Open Now/Hidden Gems — a Set so any combination of them can
   // be on at once, and together with activeCategory, per "can be used
   // concurrently."
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -86,8 +75,8 @@ export default function HomePage() {
   const [heroIdx, setHeroIdx] = useState(0);
   const [heroSearch, setHeroSearch] = useState("");
   const [heroResults, setHeroResults] = useState<{
-    businesses: { id: string; name: string; category: string }[];
-    experiences: { id: string; title: string }[];
+    businesses: { id: string; name: string; categories: string[] }[];
+    experiences: { id: string; title: string; startsAt: string }[];
   } | null>(null);
   const [city, setCity] = useState(CITIES[0]);
   const [neighborhood, setNeighborhood] = useState(""); // "" = all areas within the city
@@ -119,7 +108,7 @@ export default function HomePage() {
 
   useEffect(() => {
     setLoading(true);
-    const filterDef = QUICK_FILTERS.find((f) => f.label === activeCategory);
+    const filterDef = data?.quickFilters.find((f) => f.id === activeCategory);
     const openNowOn = activeMeta.has("openNow");
     api
       .home({
@@ -274,7 +263,7 @@ export default function HomePage() {
                   >
                     <i className="bi bi-shop text-warm-clay" />
                     <span className="flex-1">{b.name}</span>
-                    <span className="text-xs text-warm-clay">{b.category}</span>
+                    <span className="text-xs text-warm-clay">{b.categories?.[0]}</span>
                   </Link>
                 ))}
               </div>
@@ -322,17 +311,17 @@ export default function HomePage() {
           activeCategory || activeMeta.size > 0 || neighborhood ? "pt-2.5" : "pt-[26px]"
         }`}
       >
-        {QUICK_FILTERS.map((f) => (
+        {(data?.quickFilters ?? []).map((f) => (
           <button
-            key={f.label}
-            onClick={() => setActiveCategory((prev) => (prev === f.label ? null : f.label))}
+            key={f.id}
+            onClick={() => setActiveCategory((prev) => (prev === f.id ? null : f.id))}
             className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition ${
-              activeCategory === f.label
+              activeCategory === f.id
                 ? "border-terracotta bg-terracotta text-white"
                 : "border-border bg-surface text-text hover:border-terracotta hover:bg-terracotta hover:text-white"
             }`}
           >
-            <i className={`bi ${f.icon}`} />
+            {f.icon && <i className={`bi ${f.icon}`} />}
             {f.label}
           </button>
         ))}
@@ -341,7 +330,16 @@ export default function HomePage() {
       <div id="rails" />
 
       {loading ? (
-        <div className="px-11 py-16 text-center text-warm-clay max-md:px-[18px]">Loading Nairobi&apos;s best spots…</div>
+        <div className="mt-9">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className={i > 0 ? "mt-9" : ""}>
+              <div className="mb-4 px-11 max-md:px-[18px]">
+                <div className="h-6 w-48 animate-pulse rounded-lg bg-border" />
+              </div>
+              <BusinessCardRowSkeleton />
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           {/* TRENDING */}

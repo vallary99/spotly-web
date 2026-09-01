@@ -118,6 +118,16 @@ export function ExperienceCard({ experience }: { experience: Experience }) {
           {experience.price != null && (
             <p className="mt-1.5 text-[0.78rem] text-warm-clay">KES {experience.price.toLocaleString()}</p>
           )}
+          {(experience.budgetMin != null || experience.budgetMax != null) && (
+            <p className="mt-1 flex items-center gap-1 text-[0.72rem] font-semibold text-terracotta">
+              <i className="bi bi-cash-stack" />
+              {experience.budgetMin != null && experience.budgetMax != null
+                ? `KES ${experience.budgetMin.toLocaleString()}–${experience.budgetMax.toLocaleString()}`
+                : experience.budgetMin != null
+                  ? `From KES ${experience.budgetMin.toLocaleString()}`
+                  : `Up to KES ${experience.budgetMax!.toLocaleString()}`}
+            </p>
+          )}
         </div>
       </div>
       {detailOpen && !isPast && <ExperienceDetailModal experience={experience} onClose={() => setDetailOpen(false)} />}

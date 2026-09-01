@@ -11,6 +11,7 @@ import { api, ApiError, type Business, type Experience, type Media } from "@/lib
 import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
+import { DashboardSkeleton } from "@/components/Skeleton";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -62,12 +63,29 @@ export default function DashboardPage() {
   const { authed, businessId, openAuthModal } = useAuth();
   const { showToast } = useToast();
 
+  // Server never has access to localStorage, so it can only ever render
+  // the logged-out branch. authed/businessId from AuthContext resolve
+  // synchronously true on the client's very first render pass too (see
+  // AuthContext's lazy useState init) — meaning without this gate, the
+  // client's first pass skips straight past the "sign in" branch to the
+  // loading skeleton, a structurally different subtree from what the
+  // server sent. That's a real hydration mismatch (different elements,
+  // not just different text), which suppressHydrationWarning can't
+  // paper over — it only covers matching elements with different text
+  // content. Same `mounted` gate already used in Navbar/MobileBottomNav
+  // for this exact reason: render the server's version on the client's
+  // first pass too (mounted === false on both), then let the real value
+  // take over only after mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [business, setBusiness] = useState<Business | null>(null);
   const [tiers, setTiers] = useState<Record<string, TierLimits> | null>(null);
   const [subStatus, setSubStatus] = useState<{
     shouldPromptUpgrade: boolean;
     upgradeMessage: string | null;
     discountPercent: number;
+    firstCohortPremiumTrial: boolean;
     trialOffer: { tier: string; days: number } | null;
     activeTrial: { tier: string; endsAt: string } | null;
   } | null>(null);
@@ -113,7 +131,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, businessId]);
 
-  if (!authed) {
+  if (!mounted || !authed) {
     return (
       <>
         <Navbar />
@@ -141,9 +159,7 @@ export default function DashboardPage() {
     return (
       <>
         <Navbar />
-        <div className="px-11 py-24 text-center text-warm-clay" suppressHydrationWarning>
-          Loading your Business Owner Surface…
-        </div>
+        <DashboardSkeleton />
         <Footer />
       </>
     );
@@ -193,6 +209,8 @@ export default function DashboardPage() {
               experiences={hostingHistory}
               tier={business.tier}
               tiers={tiers}
+              businessBudgetMin={business.budgetMin ?? null}
+              businessBudgetMax={business.budgetMax ?? null}
               onChanged={load}
             />
           </div>
@@ -273,60 +291,92 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
 
 // ---------- Profile editor ----------
 
+const RESERVATION_POLICY_OPTIONS = [
+  { value: "RESERVATION_ONLY", label: "Reservations Only" },
+  { value: "WALK_IN_ONLY", label: "Walk-Ins Only" },
+  { value: "BOTH", label: "Reservations & Walk-Ins" },
+];
+
+const MAX_CATEGORIES_FALLBACK = 5;
+
 function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () => void }) {
   const { showToast } = useToast();
   const [name, setName] = useState(business.name);
   const [categories, setCategories] = useState<string[]>([]);
-  const [category, setCategory] = useState(business.category);
-  const [customCategory, setCustomCategory] = useState("");
+  const [maxCategories, setMaxCategories] = useState(MAX_CATEGORIES_FALLBACK);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(business.categories || []);
   const [amenities, setAmenities] = useState<string[]>(business.amenities || []);
   const [description, setDescription] = useState(business.description || "");
-  const [phone, setPhone] = useState(business.phone || "");
+  const [callPhone, setCallPhone] = useState(business.callPhone || "");
+  const [whatsappPhone, setWhatsappPhone] = useState(business.whatsappPhone || "");
   const [email, setEmail] = useState(business.email || "");
   const [address, setAddress] = useState(business.address || "");
   const [website, setWebsite] = useState(business.website || "");
+  const [reservationPolicy, setReservationPolicy] = useState<string>(business.reservationPolicy || "");
+  const [budgetMin, setBudgetMin] = useState<string>(business.budgetMin ? String(business.budgetMin) : "");
+  const [budgetMax, setBudgetMax] = useState<string>(business.budgetMax ? String(business.budgetMax) : "");
   const [hours, setHours] = useState<Record<string, { open: string; close: string } | null>>(
     business.hours || Object.fromEntries(DAYS.map((d) => [d, null])),
   );
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // Same "real categories in use" list the registration form uses, so
-    // a category typed in via "Other" elsewhere shows up here too, not
-    // just a static seed list.
     api.businesses
       .categories()
       .then((list) => setCategories(list))
       .catch(() => {
-        // Fall back to just the business's current category so the
-        // dropdown isn't empty if this call fails, editing shouldn't be
-        // blocked by it.
-        setCategories([business.category]);
+        if (business.categories && business.categories.length > 0) {
+          setCategories(business.categories);
+        }
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    api.businesses
+      .maxCategories()
+      .then((res) => setMaxCategories(res.maxCategories))
+      .catch(() => {
+        // Fallback silently
+      });
+  }, [business.categories]);
 
   const toggleAmenity = (a: string) => {
     setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
   };
 
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(cat)) {
+        return prev.filter((x) => x !== cat);
+      } else if (prev.length < maxCategories) {
+        return [...prev, cat];
+      }
+      return prev;
+    });
+  };
+
   const handleSave = async () => {
-    if (category === "Other" && !customCategory.trim()) {
-      showToast("Tell us what kind of business this is.");
+    if (selectedCategories.length === 0) {
+      showToast("Please select at least one category.");
+      return;
+    }
+    if (budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
+      showToast("Minimum budget must be less than or equal to maximum budget.");
       return;
     }
     setBusy(true);
     try {
       await api.businesses.update(business.id, {
         name,
-        category: category === "Other" ? customCategory.trim() : category,
+        categories: selectedCategories,
         description,
-        phone,
+        callPhone: callPhone || undefined,
+        whatsappPhone: whatsappPhone || undefined,
         email,
         address,
         website,
         hours,
         amenities,
+        reservationPolicy: reservationPolicy || undefined,
+        budgetMin: budgetMin ? parseFloat(budgetMin) : undefined,
+        budgetMax: budgetMax ? parseFloat(budgetMax) : undefined,
       });
       showToast("Profile updated.");
       onSaved();
@@ -346,48 +396,65 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-warm-clay">Category</span>
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">Reservation Policy</span>
           <Select
-            value={category}
-            onChange={setCategory}
-            options={[
-              ...Array.from(new Set([business.category, ...categories])).map((c) => ({ value: c, label: c })),
-              { value: "Other", label: "Other, type your own" },
-            ]}
+            value={reservationPolicy}
+            onChange={setReservationPolicy}
+            options={[{ value: "", label: "Not specified" }, ...RESERVATION_POLICY_OPTIONS]}
             className="w-full"
-            searchable
           />
         </label>
       </div>
-      {category === "Other" && (
-        <label className="mb-4 block">
-          <span className="mb-1 block text-xs font-semibold text-warm-clay">What kind of business is this?</span>
-          <input
-            value={customCategory}
-            onChange={(e) => setCustomCategory(e.target.value)}
-            className={inputClass}
-            placeholder="e.g. Bowling Alley"
-          />
-        </label>
-      )}
+
+      {/* Categories - Multi-select */}
+      <div className="mb-4">
+        <span className="mb-2 block text-xs font-semibold text-warm-clay">Categories ({selectedCategories.length}/{maxCategories})</span>
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              type="button"
+              key={cat}
+              onClick={() => toggleCategory(cat)}
+              disabled={selectedCategories.length >= maxCategories && !selectedCategories.includes(cat)}
+              className={`rounded-full border px-3.5 py-1.5 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                selectedCategories.includes(cat)
+                  ? "border-terracotta bg-terracotta text-white"
+                  : "border-border bg-cream text-text"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-warm-clay">Phone</span>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">Call Phone</span>
+          <input value={callPhone} onChange={(e) => setCallPhone(e.target.value)} className={inputClass} placeholder="+254700000000" />
         </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">WhatsApp Phone</span>
+          <input value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} className={inputClass} placeholder="+254700000000" />
+        </label>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-warm-clay">Email</span>
           <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
         </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">Address</span>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
+        </label>
       </div>
+
       <label className="mb-4 block">
         <span className="mb-1 block text-xs font-semibold text-warm-clay">Description</span>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={inputClass} />
       </label>
-      <label className="mb-5 block">
-        <span className="mb-1 block text-xs font-semibold text-warm-clay">Address</span>
-        <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
-      </label>
+
       <label className="mb-5 block">
         <span className="mb-1 block text-xs font-semibold text-warm-clay">Website (optional)</span>
         <input
@@ -397,6 +464,33 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           className={inputClass}
         />
       </label>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">Budget Min (KES, optional)</span>
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={budgetMin}
+            onChange={(e) => setBudgetMin(e.target.value)}
+            className={inputClass}
+            placeholder="e.g., 2000"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-warm-clay">Budget Max (KES, optional)</span>
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={budgetMax}
+            onChange={(e) => setBudgetMax(e.target.value)}
+            className={inputClass}
+            placeholder="e.g., 5000"
+          />
+        </label>
+      </div>
 
       <div className="mb-5">
         <span className="mb-2 block text-xs font-semibold text-warm-clay">Amenities</span>
@@ -823,12 +917,16 @@ function ExperienceManager({
   experiences,
   tier,
   tiers,
+  businessBudgetMin,
+  businessBudgetMax,
   onChanged,
 }: {
   businessId: string;
   experiences: Experience[];
   tier: string;
   tiers: Record<string, TierLimits> | null;
+  businessBudgetMin: number | null;
+  businessBudgetMax: number | null;
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
@@ -841,6 +939,9 @@ function ExperienceManager({
   const [location, setLocation] = useState("");
   const [ticketingLink, setTicketingLink] = useState("");
   const [price, setPrice] = useState("");
+  const [useBusinessBudget, setUseBusinessBudget] = useState(true);
+  const [budgetMin, setBudgetMin] = useState("");
+  const [budgetMax, setBudgetMax] = useState("");
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -849,6 +950,14 @@ function ExperienceManager({
 
   const live = experiences.filter((e) => !e.isExpired);
   const cap = tiers?.[tier]?.concurrentExperiences;
+  const hasBusinessBudget = businessBudgetMin != null || businessBudgetMax != null;
+  const businessBudgetLabel = hasBusinessBudget
+    ? businessBudgetMin != null && businessBudgetMax != null
+      ? `KES ${businessBudgetMin.toLocaleString()}–${businessBudgetMax.toLocaleString()}`
+      : businessBudgetMin != null
+        ? `From KES ${businessBudgetMin.toLocaleString()}`
+        : `Up to KES ${businessBudgetMax!.toLocaleString()}`
+    : null;
 
   const resetForm = () => {
     setEditingId(null);
@@ -859,6 +968,9 @@ function ExperienceManager({
     setLocation("");
     setTicketingLink("");
     setPrice("");
+    setUseBusinessBudget(hasBusinessBudget);
+    setBudgetMin("");
+    setBudgetMax("");
     setCoverImage(null);
     setError(null);
   };
@@ -872,12 +984,21 @@ function ExperienceManager({
     setEditingId(exp.id);
     setTitle(exp.title);
     setDescription(exp.description || "");
-    // datetime-local inputs need "YYYY-MM-DDTHH:mm", not a full ISO string.
     setStartsAt(exp.startsAt.slice(0, 16));
     setEndsAt(exp.endsAt ? exp.endsAt.slice(0, 16) : "");
     setLocation(exp.location || "");
     setTicketingLink(exp.ticketingLink || "");
     setPrice(exp.price != null ? String(exp.price) : "");
+    // inheritedBudget means the API filled these in from the business's
+    // own default (see withBudgetFallback) — this experience has no
+    // budget of its own, so default the toggle to "use business
+    // default" and leave the custom fields blank rather than
+    // pre-filling them with values that would turn into a hard-coded
+    // override the moment the form is saved.
+    const inherited = exp.inheritedBudget ?? false;
+    setUseBusinessBudget(inherited || (exp.budgetMin == null && exp.budgetMax == null && hasBusinessBudget));
+    setBudgetMin(inherited ? "" : exp.budgetMin != null ? String(exp.budgetMin) : "");
+    setBudgetMax(inherited ? "" : exp.budgetMax != null ? String(exp.budgetMax) : "");
     setCoverImage(exp.images[0] || null);
     setError(null);
     setShowForm(true);
@@ -898,18 +1019,16 @@ function ExperienceManager({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    // Every field is required for a real, complete listing — the form's
-    // own `required` attributes stop a browser submitting an empty text
-    // input, but the cover image and datetime fields need their own
-    // check here since there's no plain HTML way to make a "you must
-    // upload something" or "this can't be earlier than X" rule enforce
-    // itself.
     if (!coverImage) {
       setError("A cover image is required.");
       return;
     }
     if (endsAt && startsAt && new Date(endsAt) <= new Date(startsAt)) {
       setError("End time must be after the start time.");
+      return;
+    }
+    if (!useBusinessBudget && budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
+      setError("Minimum budget must be less than or equal to maximum budget.");
       return;
     }
     setBusy(true);
@@ -922,6 +1041,14 @@ function ExperienceManager({
       ticketingLink: ticketingLink || undefined,
       price: Number(price),
       images: [coverImage],
+      // "Use business default" sends undefined for both — the API
+      // resolves that to the business's own budget at read time (see
+      // withBudgetFallback) rather than us copying the current business
+      // values in here, so a later change to the business's default
+      // keeps applying automatically instead of freezing at today's
+      // numbers.
+      budgetMin: useBusinessBudget ? null : budgetMin ? parseFloat(budgetMin) : undefined,
+      budgetMax: useBusinessBudget ? null : budgetMax ? parseFloat(budgetMax) : undefined,
     };
     try {
       if (editingId) {
@@ -1032,7 +1159,57 @@ function ExperienceManager({
             placeholder="Ticketing link (optional)"
             className={inputClass}
           />
-          <input required type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (KES, enter 0 if free)" className={inputClass} />
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-warm-clay">Price (KES)</span>
+              <input required type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputClass} />
+            </label>
+            <label className={`block ${useBusinessBudget ? "opacity-50" : ""}`}>
+              <span className="mb-1 block text-xs font-semibold text-warm-clay">Budget Min (KES)</span>
+              <input
+                type="number"
+                min={0}
+                step="100"
+                value={budgetMin}
+                onChange={(e) => setBudgetMin(e.target.value)}
+                placeholder="e.g., 2000"
+                disabled={useBusinessBudget}
+                className={inputClass}
+              />
+            </label>
+            <label className={`block ${useBusinessBudget ? "opacity-50" : ""}`}>
+              <span className="mb-1 block text-xs font-semibold text-warm-clay">Budget Max (KES)</span>
+              <input
+                type="number"
+                min={0}
+                step="100"
+                value={budgetMax}
+                onChange={(e) => setBudgetMax(e.target.value)}
+                placeholder="e.g., 5000"
+                disabled={useBusinessBudget}
+                className={inputClass}
+              />
+            </label>
+          </div>
+          {/* Val, Sep 2026: budget lives at both the business level and
+              per-experience — this toggle is how the owner picks which
+              one applies to this particular experience. Checked =
+              inherit the business's own range (kept live, not copied —
+              see withBudgetFallback on the API); unchecked = set a
+              one-off range just for this experience. */}
+          <label className="flex items-center gap-2 text-xs text-warm-clay">
+            <input
+              type="checkbox"
+              checked={useBusinessBudget}
+              onChange={(e) => setUseBusinessBudget(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-terracotta"
+            />
+            {hasBusinessBudget ? (
+              <>Use business&apos;s default budget ({businessBudgetLabel}) instead of setting one just for this experience</>
+            ) : (
+              <>Use business&apos;s default budget (not set — add one on your profile to inherit it here)</>
+            )}
+          </label>
           {error && <p className="text-sm text-error">{error}</p>}
           <button disabled={busy || uploadingCover} className="w-full rounded-full bg-terracotta py-2.5 text-sm font-semibold text-white disabled:opacity-60">
             {busy ? "Saving…" : editingId ? "Save Experience" : "Publish Experience"}
@@ -1097,6 +1274,7 @@ function SubscriptionPanel({
     shouldPromptUpgrade: boolean;
     upgradeMessage: string | null;
     discountPercent: number;
+    firstCohortPremiumTrial: boolean;
     trialOffer: { tier: string; days: number } | null;
     activeTrial: { tier: string; endsAt: string } | null;
   } | null;
@@ -1169,6 +1347,15 @@ function SubscriptionPanel({
     ? Math.max(0, Math.ceil((new Date(subStatus.activeTrial.endsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
     : null;
 
+  // Val, Sep 2026: "for the first 100 businesses... disabling the other
+  // tiers. But they still have to activate the option." So while a
+  // first-cohort business has an unactivated Premium trial offer
+  // sitting there, the manual pay-for-a-tier picker is hidden — they
+  // should claim the free trial, not pay to skip it. The moment they
+  // activate it (or it's not this cohort, or there's no offer at all),
+  // normal tier-picking behavior returns.
+  const pendingFirstCohortOffer = !!(business.firstCohortPremiumTrial && subStatus?.trialOffer && !subStatus?.activeTrial);
+
   return (
     <div className="rounded-spotly border border-border bg-surface p-6">
       <h2 className="mb-1 text-xl text-warm-brown">Subscription</h2>
@@ -1214,7 +1401,7 @@ function SubscriptionPanel({
         </div>
       )}
 
-      {business.tier !== "PREMIUM" && (
+      {business.tier !== "PREMIUM" && !pendingFirstCohortOffer && (
         <>
           <p className="mb-1 text-sm font-semibold text-warm-brown">Choose the plan that fits your business.</p>
           <p className="mb-3 text-xs text-warm-clay">
@@ -1310,6 +1497,13 @@ function SubscriptionPanel({
             </p>
           )}
         </>
+      )}
+
+      {pendingFirstCohortOffer && (
+        <p className="text-xs text-warm-clay">
+          As one of our first 100 businesses, your only option right now is the free Premium trial above — paid
+          upgrades open back up once you've activated or skipped it.
+        </p>
       )}
     </div>
   );

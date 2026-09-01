@@ -16,6 +16,7 @@ import { isAllowedImageUrl } from "@/lib/placeholders";
 import { amenityIcon } from "@/lib/amenityIcons";
 import { computeOpenStatus, DAYS } from "@/lib/hours";
 import { MasonryGallery } from "@/components/MasonryGallery";
+import { BusinessDetailSkeleton } from "@/components/Skeleton";
 
 export default function BusinessDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params);
@@ -47,7 +48,7 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
       .businesses.get(id)
       .then((b) => {
         setBusiness(b);
-        return api.businesses.list({ category: b.category });
+        return api.businesses.list({ category: b.categories?.[0] });
       })
       .then((list) => setRelated(list.filter((b) => b.id !== id).slice(0, 6)))
       .catch(() => {
@@ -73,7 +74,7 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
     return (
       <>
         <Navbar />
-        <div className="px-11 py-24 text-center text-warm-clay">Loading…</div>
+        <BusinessDetailSkeleton />
         <Footer />
       </>
     );
@@ -141,11 +142,39 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
   };
 
   const handleCall = () => {
-    if (business.phone) {
-      window.location.href = `tel:${business.phone}`;
+    if (business.callPhone) {
+      window.location.href = `tel:${business.callPhone}`;
     } else {
       showToast("No phone number listed for this business.");
     }
+  };
+
+  // wa.me handles the web-vs-app decision itself — on a phone with
+  // WhatsApp installed it opens the app, otherwise it falls back to
+  // WhatsApp Web, so there's nothing to branch on here beyond making
+  // sure the number is digits-only (wa.me rejects "+", spaces, etc.).
+  const handleWhatsapp = () => {
+    if (business.whatsappPhone) {
+      const digits = business.whatsappPhone.replace(/[^0-9]/g, "");
+      window.open(`https://wa.me/${digits}`, "_blank");
+    } else {
+      showToast("No WhatsApp number listed for this business.");
+    }
+  };
+
+  const budgetLabel =
+    business.budgetMin != null || business.budgetMax != null
+      ? business.budgetMin != null && business.budgetMax != null
+        ? `KES ${business.budgetMin.toLocaleString()}–${business.budgetMax.toLocaleString()}`
+        : business.budgetMin != null
+          ? `From KES ${business.budgetMin.toLocaleString()}`
+          : `Up to KES ${business.budgetMax!.toLocaleString()}`
+      : null;
+
+  const RESERVATION_LABELS: Record<string, string> = {
+    RESERVATION_ONLY: "Reservations only",
+    WALK_IN_ONLY: "Walk-ins only",
+    BOTH: "Reservations & walk-ins",
   };
 
   const description = business.description || "This business hasn't added a description yet.";
@@ -214,16 +243,44 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
               </span>
             </div>
 
-            {/* ACTION ROW — Directions, Call, Share only. Website lives in
-                the Contact card in the sidebar below, showing it twice was
-                redundant; Rate & Review lives down by the Reviews section
-                itself, where writing one actually happens. */}
+            {/* Categories (up to 5), budget range and reservation policy —
+                the same fields captured at onboarding/dashboard, now
+                actually surfaced on the public profile rather than only
+                living in the edit form. */}
+            {(business.categories?.length > 0 || budgetLabel || business.reservationPolicy) && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {business.categories?.map((cat) => (
+                  <span key={cat} className="rounded-full bg-[rgba(93,96,65,0.1)] px-3 py-1 text-xs font-semibold text-olive">
+                    {cat}
+                  </span>
+                ))}
+                {budgetLabel && (
+                  <span className="flex items-center gap-1 rounded-full bg-[rgba(199,101,58,0.1)] px-3 py-1 text-xs font-semibold text-terracotta">
+                    <i className="bi bi-cash-stack" /> {budgetLabel}
+                  </span>
+                )}
+                {business.reservationPolicy && (
+                  <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-warm-clay">
+                    <i className="bi bi-calendar-check" /> {RESERVATION_LABELS[business.reservationPolicy]}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* ACTION ROW — Directions, Call, WhatsApp, Share. Website
+                lives in the Contact card in the sidebar below, showing it
+                twice was redundant; Rate & Review lives down by the
+                Reviews section itself, where writing one actually
+                happens. */}
             <div className="mt-5 flex flex-wrap gap-2.5">
               <button onClick={handleDirections} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-signpost-2" /> Directions
               </button>
               <button onClick={handleCall} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-telephone" /> Call
+              </button>
+              <button onClick={handleWhatsapp} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
+                <i className="bi bi-whatsapp" /> WhatsApp
               </button>
               <button onClick={handleShare} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-share" /> Share
@@ -363,10 +420,18 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
               <div>
                 <div className="mb-5 rounded-spotly border border-border bg-surface p-5">
                   <h4 className="mb-3 text-base text-warm-brown">Contact</h4>
-                  {business.phone && (
+                  {business.callPhone && (
                     <div className="mb-2 flex items-center gap-2 text-sm">
-                      <i className="bi bi-telephone text-terracotta" /> {business.phone}
+                      <i className="bi bi-telephone text-terracotta" /> {business.callPhone}
                     </div>
+                  )}
+                  {business.whatsappPhone && (
+                    <button
+                      onClick={handleWhatsapp}
+                      className="mb-2 flex items-center gap-2 text-sm text-terracotta underline"
+                    >
+                      <i className="bi bi-whatsapp" /> {business.whatsappPhone}
+                    </button>
                   )}
                   {business.email && (
                     <div className="mb-2 flex items-center gap-2 text-sm">
@@ -388,10 +453,19 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                       <i className="bi bi-globe" /> {business.website.replace(/^https?:\/\//, "")}
                     </a>
                   )}
-                  {!business.phone && !business.email && !business.address && !business.website && (
+                  {!business.callPhone && !business.whatsappPhone && !business.email && !business.address && !business.website && (
                     <p className="text-sm text-warm-clay">This business hasn&apos;t added contact details yet.</p>
                   )}
                 </div>
+
+                {budgetLabel && (
+                  <div className="mb-5 rounded-spotly border border-border bg-surface p-5">
+                    <h4 className="mb-2 text-base text-warm-brown">Budget</h4>
+                    <p className="flex items-center gap-2 text-sm">
+                      <i className="bi bi-cash-stack text-terracotta" /> {budgetLabel}
+                    </p>
+                  </div>
+                )}
 
                 {business.hours && (
                   <div className="rounded-spotly border border-border bg-surface p-5">

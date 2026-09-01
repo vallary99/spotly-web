@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 import { BottomSheet } from "./BottomSheet";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 // Mobile's primary navigation, replacing the top navbar's icon row and
 // the (previously non-functional) hamburger button. Desktop's top
@@ -16,14 +17,16 @@ import { api } from "@/lib/api";
 export function MobileBottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { authed, businessId, openAuthModal, logout } = useAuth();
+  const { authed, user, businessId, openAuthModal, logout } = useAuth();
+  const { showToast } = useToast();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{
-    businesses: { id: string; name: string; category: string }[];
+    businesses: { id: string; name: string; categories: string[] }[];
     experiences: { id: string; title: string }[];
   } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +64,20 @@ export function MobileBottomNav() {
     `flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5 text-[0.65rem] font-medium transition ${
       active ? "text-terracotta" : "text-warm-clay"
     }`;
+
+  const handleResetPassword = async () => {
+    if (!user?.email || resetBusy) return;
+    setResetBusy(true);
+    try {
+      await api.auth.forgotPassword(user.email);
+      showToast(`Password reset link sent to ${user.email}.`);
+      setProfileOpen(false);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't send that reset link, try again.");
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   return (
     <>
@@ -134,7 +151,7 @@ export function MobileBottomNav() {
               >
                 <i className="bi bi-shop text-warm-clay" />
                 <span className="flex-1">{b.name}</span>
-                <span className="text-xs text-warm-clay">{b.category}</span>
+                <span className="text-xs text-warm-clay">{b.categories?.[0]}</span>
               </Link>
             ))}
             {results.experiences.map((e) => (
@@ -156,10 +173,32 @@ export function MobileBottomNav() {
         )}
       </BottomSheet>
 
-      {/* Just logout — Saved and Dashboard already have their own
-          direct icons right in this same bottom nav, repeating them
-          here added nothing. */}
+      {/* Logout, plus reset password and the legal pages — Saved and
+          Dashboard already have their own direct icons right in this
+          same bottom nav, repeating them here added nothing, but there
+          was previously no mobile-reachable spot for these at all. */}
       <BottomSheet open={profileOpen} onClose={() => setProfileOpen(false)} title="Profile">
+        <button
+          onClick={handleResetPassword}
+          disabled={resetBusy}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left text-sm font-medium text-text hover:bg-cream disabled:opacity-60"
+        >
+          <i className="bi bi-key" /> {resetBusy ? "Sending…" : "Reset password"}
+        </button>
+        <Link
+          href="/terms"
+          onClick={() => setProfileOpen(false)}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left text-sm font-medium text-text hover:bg-cream"
+        >
+          <i className="bi bi-file-earmark-text" /> Terms of Service
+        </Link>
+        <Link
+          href="/privacy"
+          onClick={() => setProfileOpen(false)}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left text-sm font-medium text-text hover:bg-cream"
+        >
+          <i className="bi bi-shield-check" /> Privacy Policy
+        </Link>
         <button
           onClick={() => {
             logout();

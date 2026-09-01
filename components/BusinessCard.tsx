@@ -106,7 +106,10 @@ export function BusinessCard({ business }: { business: Business }) {
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="mb-0.5 font-semibold">{business.name}</p>
-            <p className="text-[0.8rem] text-warm-clay">{business.category}</p>
+            <p className="text-[0.8rem] text-warm-clay">
+              {business.categories?.[0]}
+              {business.categories?.length > 1 && ` +${business.categories.length - 1}`}
+            </p>
           </div>
           {business.reviewCount ? (
             <span className="flex items-center gap-1 whitespace-nowrap text-[0.82rem] font-semibold">
@@ -115,9 +118,20 @@ export function BusinessCard({ business }: { business: Business }) {
             </span>
           ) : null}
         </div>
-        <div className="mt-1.5 flex items-center gap-2.5 text-[0.78rem] text-warm-clay">
-          <i className="bi bi-geo-alt" />
-          {business.neighborhood || "Nairobi"}
+        <div className="mt-1.5 flex items-center justify-between gap-2.5 text-[0.78rem] text-warm-clay">
+          <span className="flex items-center gap-1.5">
+            <i className="bi bi-geo-alt" />
+            {business.neighborhood || "Nairobi"}
+          </span>
+          {(business.budgetMin != null || business.budgetMax != null) && (
+            <span className="font-semibold text-terracotta">
+              {business.budgetMin != null && business.budgetMax != null
+                ? `KES ${business.budgetMin.toLocaleString()}–${business.budgetMax.toLocaleString()}`
+                : business.budgetMin != null
+                  ? `From KES ${business.budgetMin.toLocaleString()}`
+                  : `Up to KES ${business.budgetMax!.toLocaleString()}`}
+            </span>
+          )}
         </div>
       </div>
     </Link>

@@ -105,9 +105,14 @@ export interface Business {
   ownerId: string;
   type: "VENUE" | "EXPERIENCE_HOST";
   name: string;
-  category: string;
+  // Replaced by `categories` (up to 5) — kept nowhere else, every
+  // consumer reads the array now.
+  categories: string[];
   description?: string | null;
-  phone?: string | null;
+  // Split from the old single `phone` field: callPhone is dialled
+  // directly, whatsappPhone opens WhatsApp (web or app) instead.
+  callPhone?: string | null;
+  whatsappPhone?: string | null;
   email?: string | null;
   address?: string | null;
   website?: string | null;
@@ -117,6 +122,15 @@ export interface Business {
   amenities: string[];
   city?: string | null;
   neighborhood?: string | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  reservationPolicy?: "RESERVATION_ONLY" | "WALK_IN_ONLY" | "BOTH" | null;
+  // Whether this business was auto-enrolled in the first-100-businesses
+  // free Premium trial offer (Val, Sep 2026) — used only to decide
+  // whether the dashboard hides the manual pay-for-a-tier picker while
+  // that offer is still pending activation; see subStatus.trialOffer
+  // for the offer itself.
+  firstCohortPremiumTrial?: boolean;
   tier: "STARTER" | "GROWTH" | "PREMIUM";
   subscriptionStatus: "ACTIVE" | "GRACE_PERIOD" | "DOWNGRADED";
   isGrandfathered: boolean;
@@ -163,6 +177,14 @@ export interface Experience {
   endsAt?: string | null;
   location?: string | null;
   price?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  // True when budgetMin/budgetMax above are the BUSINESS's default
+  // range, not something set on this experience itself (see the API's
+  // withBudgetFallback). Only meaningful for telling the dashboard's
+  // edit form whether to default to "use business default" — display
+  // components can just show budgetMin/budgetMax either way.
+  inheritedBudget?: boolean;
   ticketingLink?: string | null;
   isExpired: boolean;
 }
@@ -185,7 +207,7 @@ export interface ReviewSummary {
 
 export interface HomeResponse {
   hero: { featured: Array<{ id: string; name: string }> };
-  quickFilters: string[];
+  quickFilters: Array<{ id: string; label: string; icon: string | null; categories: string[] }>;
   rails: {
     trendingThisWeek: Business[];
     popularNearYou: Business[];
@@ -249,6 +271,7 @@ export const api = {
       }),
     remove: (id: string) => request(`/businesses/${id}`, { method: "DELETE" }),
     categories: () => request<string[]>("/businesses/categories", { auth: false }),
+    maxCategories: () => request<{ maxCategories: number }>("/businesses/max-categories", { auth: false }),
   },
   reviews: {
     forBusiness: (businessId: string) =>
@@ -296,6 +319,7 @@ export const api = {
         status: string;
         isGrandfathered: boolean;
         discountPercent: number;
+        firstCohortPremiumTrial: boolean;
         trialOffer: { tier: string; days: number } | null;
         activeTrial: { tier: string; endsAt: string } | null;
         limits: TierLimit;
@@ -314,7 +338,7 @@ export const api = {
     status: (id: string) => request<{ status: string; mpesaReceiptNumber?: string }>(`/payments/mpesa/${id}/status`),
   },
   search: (q: string) =>
-    request<{ businesses: Array<{ id: string; name: string; category: string }>; experiences: Array<{ id: string; title: string; startsAt: string }> }>(
+    request<{ businesses: Array<{ id: string; name: string; categories: string[] }>; experiences: Array<{ id: string; title: string; startsAt: string }> }>(
       `/search?q=${encodeURIComponent(q)}`,
       { auth: false },
     ),

@@ -11,100 +11,31 @@ import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
 import { Select } from "@/components/Select";
 
 // Used only until the real list loads from GET /businesses/categories
-// (which merges this same seed with whatever categories businesses have
-// actually registered under, including anything typed in via "Other"),
-// so the dropdown isn't empty for a moment on first paint.
-// Mirrors business.service.ts's SEED_CATEGORIES exactly — kept in sync
-// manually since there's no shared constants file between the two
-// projects yet. Used only until the real list loads from
-// GET /businesses/categories.
 const FALLBACK_CATEGORIES = [
-  "Pottery Studio",
-  "Painting Studio",
-  "Cake Decorating",
-  "Candle Making",
-  "Crafts Studio",
-  "Photography Studio",
-  "Art Gallery",
-  "Art Studio",
-  "Art Installation",
-  "Exhibition Space",
-  "Museum",
-  "Cultural Centre",
-  "Heritage Site",
-  "Cultural Experience",
-  "Live Music Venue",
-  "Acoustic Session Venue",
-  "Karaoke Bar",
-  "Dance Class",
-  "Dance Studio",
-  "Social Dancing Venue",
-  "Dance Performance Venue",
-  "Nightclub",
-  "Lounge",
-  "Late-Night Venue",
-  "Go-Karting",
-  "Paintball",
-  "Ziplining",
-  "Climbing Gym",
-  "Roller Skating Rink",
-  "Ice Skating Rink",
-  "Arcade",
-  "VR Gaming",
-  "Gaming Lounge",
-  "Esports Venue",
-  "Simulator Experience",
-  "Scenic View Point",
-  "Picnic Spot",
-  "Hiking Trail",
-  "Camping Site",
-  "Garden",
-  "Park",
-  "Spa",
-  "Massage",
-  "Fitness",
-  "Yoga Studio",
-  "Salon",
-  "Wellness Centre",
-  "Sports Ground",
-  "Training Facility",
-  "Sports Court",
-  "Swimming Pool",
-  "Antique Store",
-  "Farmers Market",
-  "Thrift Store",
-  "Boutique",
-  "Cooking Class",
-  "Educational Workshop",
-  "Demonstration Experience",
-  "Restaurant",
-  "Cafe",
-  "Bakery",
-  "Diner",
-  "Specialty Food Spot",
-  "Cocktail Bar",
-  "Wine Bar",
-  "Brewery",
-  "Specialty Drinks Spot",
-  "Buffet",
-  "Sharing Platters Spot",
-  "Nyama Choma Spot",
-  "Choma Base",
-  "Street Food",
-  "Group Dining Venue",
-  "Services",
+  "Pottery Studio", "Painting Studio", "Cake Decorating", "Candle Making", "Crafts Studio", "Photography Studio",
+  "Art Gallery", "Art Studio", "Art Installation", "Exhibition Space", "Museum", "Cultural Centre", "Heritage Site",
+  "Cultural Experience", "Live Music Venue", "Acoustic Session Venue", "Karaoke Bar", "Dance Class", "Dance Studio",
+  "Social Dancing Venue", "Dance Performance Venue", "Nightclub", "Lounge", "Late-Night Venue", "Go-Karting", "Paintball",
+  "Ziplining", "Climbing Gym", "Roller Skating Rink", "Ice Skating Rink", "Arcade", "VR Gaming", "Gaming Lounge",
+  "Esports Venue", "Simulator Experience", "Scenic View Point", "Picnic Spot", "Hiking Trail", "Camping Site", "Garden",
+  "Park", "Spa", "Massage", "Fitness", "Yoga Studio", "Salon", "Wellness Centre", "Sports Ground", "Training Facility",
+  "Sports Court", "Swimming Pool", "Antique Store", "Farmers Market", "Thrift Store", "Boutique", "Cooking Class",
+  "Educational Workshop", "Demonstration Experience", "Restaurant", "Cafe", "Bakery", "Diner", "Specialty Food Spot",
+  "Cocktail Bar", "Wine Bar", "Brewery", "Specialty Drinks Spot", "Buffet", "Sharing Platters Spot", "Nyama Choma Spot",
+  "Choma Base", "Street Food", "Group Dining Venue", "Services",
 ];
+
 const AMENITY_OPTIONS = [
-  "WiFi",
-  "Parking",
-  "Outdoor Seating",
-  "Pet Friendly",
-  "Wheelchair Accessible",
-  "Card Payments",
-  "Family Friendly",
-  "Takeaway",
-  "Reservations",
+  "WiFi", "Parking", "Outdoor Seating", "Pet Friendly", "Wheelchair Accessible", "Card Payments", "Family Friendly", "Takeaway", "Reservations",
 ];
+
+const RESERVATION_POLICY_OPTIONS = [
+  { value: "RESERVATION_ONLY", label: "Reservations Only" },
+  { value: "WALK_IN_ONLY", label: "Walk-Ins Only" },
+  { value: "BOTH", label: "Reservations & Walk-Ins" },
+];
+
+const MAX_CATEGORIES_FALLBACK = 5;
 
 export default function NewBusinessPage() {
   const { authed, businessId, openAuthModal, refreshAuth } = useAuth();
@@ -114,29 +45,39 @@ export default function NewBusinessPage() {
   const [type, setType] = useState<"VENUE" | "EXPERIENCE_HOST">("VENUE");
   const [name, setName] = useState("");
   const [categories, setCategories] = useState<string[]>(FALLBACK_CATEGORIES);
-  const [category, setCategory] = useState(FALLBACK_CATEGORIES[0]);
-  const [customCategory, setCustomCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState("");
-  const [phone, setPhone] = useState("");
+  const [callPhone, setCallPhone] = useState("");
+  const [whatsappPhone, setWhatsappPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [website, setWebsite] = useState("");
   const [city, setCity] = useState(CITIES[0]);
   const [neighborhood, setNeighborhood] = useState(LOCATIONS_BY_CITY[CITIES[0]][0]);
   const [amenities, setAmenities] = useState<string[]>([]);
+  const [reservationPolicy, setReservationPolicy] = useState<"RESERVATION_ONLY" | "WALK_IN_ONLY" | "BOTH" | "">("BOTH");
+  const [budgetMin, setBudgetMin] = useState("");
+  const [budgetMax, setBudgetMax] = useState("");
+  const [maxCategories, setMaxCategories] = useState(MAX_CATEGORIES_FALLBACK);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Real categories in use (plus the seed list), this is what makes a
-    // custom "Other" entry from one business show up as a real, pickable
-    // option for the next business, instead of everyone re-typing it.
     api.businesses
       .categories()
       .then((list) => list.length > 0 && setCategories(list))
       .catch(() => {
-        // Fall back to the static seed list silently, registration
-        // shouldn't be blocked by this endpoint being unreachable.
+        // Fallback silently
+      });
+    // Admin-configurable cap (Val, Sep 2026: "cap at 5 for now but make
+    // it configurable") — falls back to the hardcoded default above if
+    // this can't be reached, same silent-fallback instinct as the
+    // categories list fetch just above.
+    api.businesses
+      .maxCategories()
+      .then((res) => setMaxCategories(res.maxCategories))
+      .catch(() => {
+        // Fallback silently
       });
   }, []);
 
@@ -148,8 +89,18 @@ export default function NewBusinessPage() {
     if (businessId) {
       router.replace("/dashboard");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed, businessId]);
+  }, [authed, businessId, openAuthModal, router]);
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(cat)) {
+        return prev.filter((x) => x !== cat);
+      } else if (prev.length < maxCategories) {
+        return [...prev, cat];
+      }
+      return prev;
+    });
+  };
 
   const toggleAmenity = (a: string) => {
     setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
@@ -157,33 +108,40 @@ export default function NewBusinessPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (category === "Other" && !customCategory.trim()) {
-      setError("Tell us what kind of business this is.");
+
+    if (selectedCategories.length === 0) {
+      setError("Please select at least one category.");
       return;
     }
     if (!description.trim()) {
       setError("A short description helps people know what to expect, please add one.");
       return;
     }
+    if (budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
+      setError("Minimum budget must be less than or equal to maximum budget.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
       await api.businesses.create({
         type,
         name,
-        category: category === "Other" ? customCategory.trim() : category,
+        categories: selectedCategories,
         description: description.trim(),
-        phone: phone || undefined,
+        callPhone: callPhone || undefined,
+        whatsappPhone: whatsappPhone || undefined,
         email: email || undefined,
         address: address || undefined,
         website: website || undefined,
         city,
         neighborhood,
         amenities,
+        reservationPolicy: reservationPolicy || undefined,
+        budgetMin: budgetMin ? parseFloat(budgetMin) : undefined,
+        budgetMax: budgetMax ? parseFloat(budgetMax) : undefined,
       });
-      // Backend flips this user's role to BUSINESS_OWNER, but their
-      // current token still says REGISTERED until refreshed, see
-      // POST /auth/refresh.
       await refreshAuth();
       showToast(`${name} is live on Spotly!`);
       router.push("/dashboard");
@@ -245,15 +203,30 @@ export default function NewBusinessPage() {
             <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Jiko Kilimani" />
           </Field>
 
+          {/* Categories - Multi-select */}
+          <div>
+            <span className="mb-2 block text-sm font-semibold text-warm-brown">Categories ({selectedCategories.length}/{maxCategories})</span>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button
+                  type="button"
+                  key={cat}
+                  onClick={() => toggleCategory(cat)}
+                  disabled={selectedCategories.length >= maxCategories && !selectedCategories.includes(cat)}
+                  className={`rounded-full border px-3.5 py-1.5 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                    selectedCategories.includes(cat)
+                      ? "border-terracotta bg-terracotta text-white"
+                      : "border-border bg-surface text-text"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            {selectedCategories.length === 0 && <p className="mt-1 text-xs text-error">Please select at least one category</p>}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Category">
-              <Select
-                value={category}
-                onChange={setCategory}
-                options={[...categories.map((c) => ({ value: c, label: c })), { value: "Other", label: "Other, type your own" }]}
-                searchable
-              />
-            </Field>
             <Field label="Neighborhood / Area">
               <Select
                 value={neighborhood}
@@ -261,22 +234,15 @@ export default function NewBusinessPage() {
                 options={LOCATIONS_BY_CITY[city].map((n) => ({ value: n, label: n }))}
               />
             </Field>
-          </div>
-          {category === "Other" && (
-            <Field label="What kind of business is this?">
-              <input
-                required
-                value={customCategory}
-                onChange={(e) => setCustomCategory(e.target.value)}
-                className={inputClass}
-                placeholder="e.g. Bowling Alley"
+            <Field label="Reservation Policy">
+              <Select
+                value={reservationPolicy}
+                onChange={(val) => setReservationPolicy(val as any)}
+                options={[{ value: "", label: "Not specified" }, ...RESERVATION_POLICY_OPTIONS]}
               />
-              <p className="mt-1.5 text-xs text-warm-clay">
-                This becomes a real category, future businesses of the same type will see it in this
-                dropdown instead of needing to pick &quot;Other&quot; themselves.
-              </p>
             </Field>
-          )}
+          </div>
+
           <p className="-mt-2 text-xs text-warm-clay">
             <i className="bi bi-geo-alt mr-1" />
             City: <span className="font-semibold text-text">{city}</span>, Spotly launches in Nairobi first; more cities coming soon.
@@ -294,20 +260,51 @@ export default function NewBusinessPage() {
           </Field>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Phone">
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} placeholder="+254700000000" />
+            <Field label="Call Phone">
+              <input value={callPhone} onChange={(e) => setCallPhone(e.target.value)} className={inputClass} placeholder="+254700000000" />
             </Field>
-            <Field label="Email">
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="hello@business.co.ke" />
+            <Field label="WhatsApp Phone">
+              <input value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} className={inputClass} placeholder="+254700000000" />
             </Field>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Email">
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="hello@business.co.ke" />
+            </Field>
             <Field label="Address">
               <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="14 Wood Avenue, Kilimani" />
             </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Website (optional)">
               <input value={website} onChange={(e) => setWebsite(e.target.value)} className={inputClass} placeholder="mybusiness.co.ke" />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Budget Min (KES, optional)">
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={budgetMin}
+                onChange={(e) => setBudgetMin(e.target.value)}
+                className={inputClass}
+                placeholder="e.g., 2000"
+              />
+            </Field>
+            <Field label="Budget Max (KES, optional)">
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={budgetMax}
+                onChange={(e) => setBudgetMax(e.target.value)}
+                className={inputClass}
+                placeholder="e.g., 5000"
+              />
             </Field>
           </div>
 
