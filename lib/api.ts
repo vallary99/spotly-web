@@ -282,7 +282,7 @@ export const api = {
   bookmarks: {
     list: () => request<Array<{ id: string; businessId?: string; business?: Business; experienceId?: string; experience?: Experience }>>("/bookmarks"),
     create: (dto: { businessId?: string; experienceId?: string }) =>
-      request("/bookmarks", { method: "POST", body: JSON.stringify(dto) }),
+      request<{ id: string; businessId?: string; experienceId?: string }>("/bookmarks", { method: "POST", body: JSON.stringify(dto) }),
     remove: (id: string) => request(`/bookmarks/${id}`, { method: "DELETE" }),
   },
   experiences: {

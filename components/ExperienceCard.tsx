@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { useState } from "react";
 import type { Experience } from "@/lib/api";
-import { api, ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
+import { useBookmarks } from "./BookmarksContext";
 import { ExperienceDetailModal } from "./ExperienceDetailModal";
 
 // Same footprint as BusinessCard (w-[268px], h-[170px] image), and the
@@ -23,7 +24,8 @@ import { ExperienceDetailModal } from "./ExperienceDetailModal";
 export function ExperienceCard({ experience }: { experience: Experience }) {
   const { authed, openAuthModal } = useAuth();
   const { showToast } = useToast();
-  const [saved, setSaved] = useState(false);
+  const { isSaved, toggleSave } = useBookmarks();
+  const saved = isSaved({ experienceId: experience.id });
   const [busy, setBusy] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
@@ -46,11 +48,14 @@ export function ExperienceCard({ experience }: { experience: Experience }) {
     }
     setBusy(true);
     try {
-      await api.bookmarks.create({ experienceId: experience.id });
-      setSaved(true);
-      showToast(`Saved ${experience.title} to your places`);
+      // toggleSave figures out create vs. remove on its own by checking
+      // whether this experience is already saved — this is what
+      // actually makes "unsave" work at all (it never used to: this
+      // used to always call create(), Val, Sep 2026).
+      const nowSaved = await toggleSave({ experienceId: experience.id });
+      showToast(nowSaved ? `Saved ${experience.title} to your places` : `Removed ${experience.title} from your places`);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Couldn't save that, try again.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't update that, try again.");
     } finally {
       setBusy(false);
     }

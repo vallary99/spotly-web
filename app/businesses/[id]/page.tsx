@@ -15,6 +15,7 @@ import { api, ApiError, type Business, type Experience, type ReviewSummary } fro
 import { isAllowedImageUrl } from "@/lib/placeholders";
 import { amenityIcon } from "@/lib/amenityIcons";
 import { computeOpenStatus, DAYS } from "@/lib/hours";
+import { useBookmarks } from "@/components/BookmarksContext";
 import { MasonryGallery } from "@/components/MasonryGallery";
 import { BusinessDetailSkeleton } from "@/components/Skeleton";
 
@@ -28,7 +29,8 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
   const [related, setRelated] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const { isSaved, toggleSave } = useBookmarks();
+  const saved = business ? isSaved({ businessId: business.id }) : false;
   const [saveBusy, setSaveBusy] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
@@ -111,11 +113,14 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
     if (isOwnBusiness) return showToast("You can't save your own business.");
     setSaveBusy(true);
     try {
-      await api.bookmarks.create({ businessId: business.id });
-      setSaved(true);
-      showToast("Saved to your collection.");
+      // toggleSave figures out create vs. remove on its own by checking
+      // whether this business is already saved — this is what actually
+      // makes "unsave" work at all (it never used to: this used to
+      // always call create(), Val, Sep 2026).
+      const nowSaved = await toggleSave({ businessId: business.id });
+      showToast(nowSaved ? "Saved to your collection." : "Removed from your collection.");
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Couldn't save, try again.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't update that, try again.");
     } finally {
       setSaveBusy(false);
     }
@@ -202,6 +207,13 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
 
         const nameStatusBlock = (
           <div className="px-11 pt-[26px] max-md:px-4">
+            {/* Save moved up next to the name (Val, Sep 2026) — out of
+                the Call/WhatsApp/Share row entirely, which now fits
+                comfortably in one row on mobile instead of wrapping to
+                two. An icon-only button here (no text label) reads
+                clearly enough next to the title without needing "Save"
+                spelled out, the same way a title-adjacent favorite
+                icon works on most listing pages. */}
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl text-warm-brown sm:text-[2rem]">{business.name}</h1>
               {isOwnBusiness && (
@@ -209,35 +221,46 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                   <i className="bi bi-shop" /> This is your business
                 </span>
               )}
+              {!isOwnBusiness && (
+                <button
+                  onClick={handleSave}
+                  disabled={saveBusy}
+                  aria-label={saved ? "Unsave" : "Save"}
+                  className={`ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-base transition ${
+                    saved
+                      ? "border-terracotta bg-terracotta text-white"
+                      : "border-border bg-surface hover:border-terracotta hover:text-terracotta"
+                  }`}
+                >
+                  <i className={saved ? "bi bi-heart-fill" : "bi bi-heart"} />
+                </button>
+              )}
             </div>
+            {/* Rating and location only — open/closed status isn't a
+                priority here anymore (Val, Sep 2026: already visible on
+                the card before someone taps in); it now lives as a
+                small badge next to Opening Hours in the About tab
+                instead, where it's contextual rather than the first
+                thing on the page. Neighborhood is what a Nairobi
+                audience actually recognizes, so it's shown ahead of the
+                specific street address rather than after it. */}
             <div className="mt-2 flex flex-wrap items-center gap-3.5 text-sm text-warm-clay">
               {reviews && reviews.count > 0 && (
-                <>
-                  <span className="flex items-center gap-1 font-bold text-text">
-                    <i className="bi bi-star-fill text-gold" /> {reviews.average}{" "}
-                    <span className="font-normal text-warm-clay">({reviews.count} reviews)</span>
-                  </span>
-                  <span>·</span>
-                </>
-              )}
-              {openStatus && (
-                <span className={openStatus.open ? "font-semibold text-success" : "font-semibold text-error"}>
-                  <i className="bi bi-dot" />
-                  {openStatus.label}
+                <span className="flex items-center gap-1 font-bold text-text">
+                  <i className="bi bi-star-fill text-gold" /> {reviews.average}{" "}
+                  <span className="font-normal text-warm-clay">({reviews.count} reviews)</span>
                 </span>
               )}
-              {openStatus && <span>·</span>}
               <span className="flex items-center gap-1.5">
-                <i className="bi bi-geo-alt" /> {business.address || business.neighborhood || "Nairobi"}
+                <i className="bi bi-geo-alt" /> {business.neighborhood || business.address || "Nairobi"}
               </span>
             </div>
 
-            {/* ACTION ROW — trimmed to Call/WhatsApp/Share/Save only.
-                Directions, categories, budget, and reservation policy
-                all moved into the About tab (Contact and Details
-                cards) — this row's job now is just "the few things
-                someone wants to do immediately," not "show everything
-                at once." */}
+            {/* ACTION ROW — Call, WhatsApp, Share. Directions,
+                categories, budget, and reservation policy all moved
+                into the About tab (Contact and Details cards) — this
+                row's job now is just "the few things someone wants to
+                do immediately," not "show everything at once." */}
             <div className="mt-5 flex flex-wrap gap-2.5">
               <button onClick={handleCall} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-telephone" /> Call
@@ -248,19 +271,6 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
               <button onClick={handleShare} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-share" /> Share
               </button>
-              {!isOwnBusiness && (
-                <button
-                  onClick={handleSave}
-                  disabled={saveBusy}
-                  className={`flex items-center gap-2 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition ${
-                    saved
-                      ? "border-terracotta bg-terracotta text-white"
-                      : "border-border bg-surface hover:border-terracotta hover:text-terracotta"
-                  }`}
-                >
-                  <i className={saved ? "bi bi-heart-fill" : "bi bi-heart"} /> {saved ? "Saved" : "Save"}
-                </button>
-              )}
             </div>
           </div>
         );
@@ -470,7 +480,18 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
 
                 {business.hours && (
                   <div className="rounded-spotly border border-border bg-surface p-5">
-                    <h4 className="mb-3 text-base text-warm-brown">Opening Hours</h4>
+                    <h4 className="mb-3 flex items-center gap-2 text-base text-warm-brown">
+                      Opening Hours
+                      {openStatus && (
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            openStatus.open ? "bg-[rgba(93,96,65,0.12)] text-success" : "bg-[rgba(199,101,58,0.1)] text-error"
+                          }`}
+                        >
+                          {openStatus.label}
+                        </span>
+                      )}
+                    </h4>
                     {DAYS.map((day) => {
                       const h = business.hours?.[day];
                       const isToday = day === DAYS[new Date().getDay()];

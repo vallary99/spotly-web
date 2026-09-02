@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { api, ApiError, type Business } from "@/lib/api";
+import { ApiError, type Business } from "@/lib/api";
 import { resolveBusinessPhotoUrl } from "@/lib/placeholders";
 import { computeOpenStatus } from "@/lib/hours";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
+import { useBookmarks } from "./BookmarksContext";
 
 // Matches the original spotly-homepage.html prototype's .biz-card
 // exactly: top-left badge is open/closed status (not location), top row
@@ -16,7 +17,8 @@ import { useToast } from "./ToastContext";
 export function BusinessCard({ business }: { business: Business }) {
   const { authed, user, openAuthModal } = useAuth();
   const { showToast } = useToast();
-  const [saved, setSaved] = useState(false);
+  const { isSaved, toggleSave } = useBookmarks();
+  const saved = isSaved({ businessId: business.id });
   const [busy, setBusy] = useState(false);
   const photoUrl = resolveBusinessPhotoUrl(business.media);
   // No stock-photo fallback anymore — a business with no real photo, or
@@ -44,11 +46,14 @@ export function BusinessCard({ business }: { business: Business }) {
     }
     setBusy(true);
     try {
-      await api.bookmarks.create({ businessId: business.id });
-      setSaved(true);
-      showToast(`Saved ${business.name} to your places`);
+      // toggleSave figures out create vs. remove on its own by
+      // checking whether this business is already saved — this is what
+      // actually makes "unsave" work at all (it never used to: this
+      // used to always call create(), Val, Sep 2026).
+      const nowSaved = await toggleSave({ businessId: business.id });
+      showToast(nowSaved ? `Saved ${business.name} to your places` : `Removed ${business.name} from your places`);
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Couldn't save that, try again.");
+      showToast(err instanceof ApiError ? err.message : "Couldn't update that, try again.");
     } finally {
       setBusy(false);
     }
