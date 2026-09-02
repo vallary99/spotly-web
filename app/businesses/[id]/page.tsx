@@ -185,32 +185,25 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
       {/* GALLERY — Pinterest-style masonry, each photo keeps its own
           natural aspect ratio rather than being cropped into a fixed
           box; tap/click any photo for the full-screen swipe/zoom viewer.
-          Save lives as a floating heart directly on the gallery, same
-          pattern as the browse cards, rather than in the action row
-          below, which is now just Directions/Call/Share. */}
+          No floating save button here anymore (Val, Sep 2026: it read
+          as ambiguous — save the photo, or the business? — sitting
+          directly on top of a photo). Save is a clearly labeled button
+          in the action row below instead, next to Call/WhatsApp/Share,
+          where there's no photo underneath it to make the target
+          unclear. Side padding is tight on mobile specifically so the
+          grid reads closer to edge-to-edge, matching the Pinterest
+          reference — desktop's spacing is untouched. */}
       {(() => {
         const galleryBlock = (
-          <div className="relative px-11 pt-4 max-md:px-4">
+          <div className="px-11 pt-4 max-md:px-2">
             <MasonryGallery media={galleryMedia} businessName={business.name} />
-            {!isOwnBusiness && (
-              <button
-                onClick={handleSave}
-                disabled={saveBusy}
-                className={`absolute right-[52px] top-[30px] z-[2] flex h-11 w-11 items-center justify-center rounded-full text-lg shadow-[0_4px_14px_rgba(67,53,47,0.2)] transition max-md:right-8 max-md:top-8 ${
-                  saved ? "bg-terracotta text-white" : "bg-white/95 text-text hover:scale-105"
-                }`}
-                aria-label={saved ? "Saved" : "Save"}
-              >
-                <i className={saved ? "bi bi-heart-fill" : "bi bi-heart"} />
-              </button>
-            )}
           </div>
         );
 
         const nameStatusBlock = (
           <div className="px-11 pt-[26px] max-md:px-4">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-[2rem] text-warm-brown">{business.name}</h1>
+              <h1 className="text-2xl text-warm-brown sm:text-[2rem]">{business.name}</h1>
               {isOwnBusiness && (
                 <span className="flex items-center gap-1.5 rounded-full bg-[rgba(93,96,65,0.12)] px-3.5 py-1 text-xs font-semibold text-olive">
                   <i className="bi bi-shop" /> This is your business
@@ -239,39 +232,13 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
               </span>
             </div>
 
-            {/* Categories (up to 5), budget range and reservation policy —
-                the same fields captured at onboarding/dashboard, now
-                actually surfaced on the public profile rather than only
-                living in the edit form. */}
-            {(business.categories?.length > 0 || budgetLabel || business.reservationPolicy) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {business.categories?.map((cat) => (
-                  <span key={cat} className="rounded-full bg-[rgba(93,96,65,0.1)] px-3 py-1 text-xs font-semibold text-olive">
-                    {cat}
-                  </span>
-                ))}
-                {budgetLabel && (
-                  <span className="flex items-center gap-1 rounded-full bg-[rgba(199,101,58,0.1)] px-3 py-1 text-xs font-semibold text-terracotta">
-                    <i className="bi bi-cash-stack" /> {budgetLabel}
-                  </span>
-                )}
-                {business.reservationPolicy && (
-                  <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-warm-clay">
-                    <i className="bi bi-calendar-check" /> {RESERVATION_LABELS[business.reservationPolicy]}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* ACTION ROW — Directions, Call, WhatsApp, Share. Website
-                lives in the Contact card in the sidebar below, showing it
-                twice was redundant; Rate & Review lives down by the
-                Reviews section itself, where writing one actually
-                happens. */}
+            {/* ACTION ROW — trimmed to Call/WhatsApp/Share/Save only.
+                Directions, categories, budget, and reservation policy
+                all moved into the About tab (Contact and Details
+                cards) — this row's job now is just "the few things
+                someone wants to do immediately," not "show everything
+                at once." */}
             <div className="mt-5 flex flex-wrap gap-2.5">
-              <button onClick={handleDirections} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
-                <i className="bi bi-signpost-2" /> Directions
-              </button>
               <button onClick={handleCall} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-telephone" /> Call
               </button>
@@ -281,6 +248,19 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
               <button onClick={handleShare} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
                 <i className="bi bi-share" /> Share
               </button>
+              {!isOwnBusiness && (
+                <button
+                  onClick={handleSave}
+                  disabled={saveBusy}
+                  className={`flex items-center gap-2 rounded-full border px-[18px] py-2.5 text-sm font-semibold transition ${
+                    saved
+                      ? "border-terracotta bg-terracotta text-white"
+                      : "border-border bg-surface hover:border-terracotta hover:text-terracotta"
+                  }`}
+                >
+                  <i className={saved ? "bi bi-heart-fill" : "bi bi-heart"} /> {saved ? "Saved" : "Save"}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -452,14 +432,39 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                   {!business.callPhone && !business.whatsappPhone && !business.email && !business.address && !business.website && (
                     <p className="text-sm text-warm-clay">This business hasn&apos;t added contact details yet.</p>
                   )}
+                  <button
+                    onClick={handleDirections}
+                    className="mt-3 flex items-center gap-2 rounded-full border border-border bg-cream px-4 py-2 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta"
+                  >
+                    <i className="bi bi-signpost-2" /> Directions
+                  </button>
                 </div>
 
-                {budgetLabel && (
+                {/* Categories, budget range and reservation policy — the
+                    same fields captured at onboarding/dashboard, moved
+                    here from the header (Val, Sep 2026) so the primary
+                    mobile view reaches photos sooner; this tab is one
+                    tap away for anyone who wants them before deciding. */}
+                {(business.categories?.length > 0 || budgetLabel || business.reservationPolicy) && (
                   <div className="mb-5 rounded-spotly border border-border bg-surface p-5">
-                    <h4 className="mb-2 text-base text-warm-brown">Budget</h4>
-                    <p className="flex items-center gap-2 text-sm">
-                      <i className="bi bi-cash-stack text-terracotta" /> {budgetLabel}
-                    </p>
+                    <h4 className="mb-3 text-base text-warm-brown">Details</h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {business.categories?.map((cat) => (
+                        <span key={cat} className="rounded-full bg-[rgba(93,96,65,0.1)] px-3 py-1 text-xs font-semibold text-olive">
+                          {cat}
+                        </span>
+                      ))}
+                      {budgetLabel && (
+                        <span className="flex items-center gap-1 rounded-full bg-[rgba(199,101,58,0.1)] px-3 py-1 text-xs font-semibold text-terracotta">
+                          <i className="bi bi-cash-stack" /> {budgetLabel}
+                        </span>
+                      )}
+                      {business.reservationPolicy && (
+                        <span className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold text-warm-clay">
+                          <i className="bi bi-calendar-check" /> {RESERVATION_LABELS[business.reservationPolicy]}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 
