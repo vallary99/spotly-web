@@ -2,18 +2,27 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import type { GalleryMediaItem } from "./MasonryGallery";
 
 // Full-screen media viewer — "Gallery = discovery, full-screen viewer =
-// inspection." Supports swipe between images, pinch-to-zoom (and
-// double-tap as a one-handed equivalent), an image counter, and
-// keyboard navigation for non-touch devices.
+// inspection." Touch users swipe vertically between items (up = next,
+// down = previous), matching the vertical-feed convention of
+// Instagram/TikTok/Stories rather than a traditional left/right
+// lightbox (Val, Sep 2026) — desktop is untouched and still uses the
+// visible left/right arrow buttons plus ArrowLeft/ArrowRight on the
+// keyboard, since neither of those ever fires from a touch swipe
+// anyway. Videos get the exact same full-screen/swipe treatment as
+// photos now (Val, Sep 2026: "confirm even videos behave the same
+// way... full screen and scrollable") — only pinch/double-tap zoom is
+// skipped for video, since zooming a playing video isn't a meaningful
+// "inspect it closer" action the way it is for a photo.
 export function Lightbox({
-  images,
+  media,
   startIndex = 0,
   alt,
   onClose,
 }: {
-  images: string[];
+  media: GalleryMediaItem[];
   startIndex?: number;
   alt: string;
   onClose: () => void;
@@ -21,15 +30,18 @@ export function Lightbox({
   const [idx, setIdx] = useState(startIndex);
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
-  // Tracks which images in this set failed to load (e.g. a dead/stale
+  // Tracks which items in this set failed to load (e.g. a dead/stale
   // storage URL) so we can show a clear placeholder instead of either a
   // browser broken-image icon or, worse, letting next/image's fetch
   // error bubble up as an unhandled one.
   const [brokenIdx, setBrokenIdx] = useState<Set<number>>(new Set());
   const pinchState = useRef<{ startDist: number; startScale: number } | null>(null);
   const panState = useRef<{ startX: number; startY: number; origin: { x: number; y: number } } | null>(null);
-  const swipeStartX = useRef<number | null>(null);
+  const swipeStartY = useRef<number | null>(null);
   const lastTapRef = useRef(0);
+
+  const current = media[idx];
+  const isVideo = current?.type === "VIDEO";
 
   const resetZoom = () => {
     setScale(1);
@@ -37,7 +49,7 @@ export function Lightbox({
   };
 
   const goTo = (next: number) => {
-    if (next < 0 || next >= images.length) return;
+    if (next < 0 || next >= media.length) return;
     setIdx(next);
     resetZoom();
   };
@@ -59,13 +71,24 @@ export function Lightbox({
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
+    // Video doesn't get pinch/double-tap zoom — a playing video's
+    // controls (scrub bar, play/pause) need normal taps to reach it,
+    // and "zoom in on a video" isn't a meaningful inspection action the
+    // way it is for a still photo.
+    if (e.touches.length === 2 && !isVideo) {
       pinchState.current = { startDist: dist(e.touches), startScale: scale };
     } else if (e.touches.length === 1) {
-      if (scale > 1) {
+      if (scale > 1 && !isVideo) {
         panState.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, origin: translate };
       } else {
-        swipeStartX.current = e.touches[0].clientX;
+        // Touch-only, deliberately not device-detected — a mouse never
+        // fires touch events at all, so desktop keeps using the visible
+        // arrow buttons and left/right keyboard nav below untouched.
+        // Vertical, not horizontal: Val, Sep 2026, "make it full screen
+        // and allow vertical scrolls like on other social media
+        // platforms" — swipe up for next, matching TikTok/Reels/Stories
+        // convention, rather than the old left/right lightbox swipe.
+        swipeStartY.current = e.touches[0].clientY;
       }
     }
   };
@@ -84,11 +107,17 @@ export function Lightbox({
   const handleTouchEnd = (e: React.TouchEvent) => {
     pinchState.current = null;
     panState.current = null;
-    if (scale === 1 && swipeStartX.current != null && e.changedTouches.length === 1) {
-      const delta = e.changedTouches[0].clientX - swipeStartX.current;
+    if (scale === 1 && swipeStartY.current != null && e.changedTouches.length === 1) {
+      const delta = e.changedTouches[0].clientY - swipeStartY.current;
+      // Swipe up (finger moves toward the top, delta negative) -> next
+      // item; swipe down -> previous. Only fires at scale === 1 — once
+      // zoomed in on a photo, the same vertical drag pans it instead
+      // (see handleTouchMove's panState branch above).
       if (Math.abs(delta) > 60) goTo(delta < 0 ? idx + 1 : idx - 1);
     }
-    swipeStartX.current = null;
+    swipeStartY.current = null;
+
+    if (isVideo) return; // no double-tap-to-zoom for video, see handleTouchStart
 
     // Double-tap to zoom, a one-handed equivalent to pinch, common on
     // mobile where reaching for a second finger mid-browse is awkward.
@@ -113,32 +142,32 @@ export function Lightbox({
         <i className="bi bi-x-lg" />
       </button>
 
-      {images.length > 1 && (
+      {media.length > 1 && (
         <span className="absolute left-5 top-5 z-[2] rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold text-white">
-          {idx + 1} / {images.length}
+          {idx + 1} / {media.length}
         </span>
       )}
 
-      {images.length > 1 && idx > 0 && (
+      {media.length > 1 && idx > 0 && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             goTo(idx - 1);
           }}
           className="absolute left-4 top-1/2 z-[2] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25 max-md:hidden"
-          aria-label="Previous photo"
+          aria-label="Previous"
         >
           <i className="bi bi-chevron-left" />
         </button>
       )}
-      {images.length > 1 && idx < images.length - 1 && (
+      {media.length > 1 && idx < media.length - 1 && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             goTo(idx + 1);
           }}
           className="absolute right-4 top-1/2 z-[2] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25 max-md:hidden"
-          aria-label="Next photo"
+          aria-label="Next"
         >
           <i className="bi bi-chevron-right" />
         </button>
@@ -156,12 +185,28 @@ export function Lightbox({
         >
           {brokenIdx.has(idx) ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-white/60">
-              <i className="bi bi-image text-4xl" />
-              <span className="text-sm">This photo isn&apos;t available.</span>
+              <i className={`bi ${isVideo ? "bi-camera-video-off" : "bi-image"} text-4xl`} />
+              <span className="text-sm">This {isVideo ? "video" : "photo"} isn&apos;t available.</span>
             </div>
+          ) : isVideo ? (
+            // key={current.url} forces a fresh <video> element per item
+            // rather than React reusing the same DOM node across a swipe
+            // — reusing it would carry over playback position/state from
+            // the previous video, autoPlay wouldn't re-fire, and the
+            // swipe-to-navigate gesture on this same element would keep
+            // seeing whatever touch state the old video left behind.
+            <video
+              key={current.url}
+              src={current.url}
+              controls
+              autoPlay
+              playsInline
+              className="h-full w-full object-contain"
+              onError={() => setBrokenIdx((prev) => new Set(prev).add(idx))}
+            />
           ) : (
             <Image
-              src={images[idx]}
+              src={current.url}
               alt={alt}
               fill
               sizes="90vw"

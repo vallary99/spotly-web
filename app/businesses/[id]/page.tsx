@@ -32,12 +32,10 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
   const [saveBusy, setSaveBusy] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
-  // Paid tiers (Growth/Premium) can have far more photos than Starter's
-  // 5-photo cap, up to 100 on Premium — a single continuous scroll would
-  // bury the actual business info under a wall of photos first. Tabs
-  // split "Photos" from "About" so the info is reachable immediately.
-  // Starter's layout is untouched below (small enough gallery that this
-  // problem doesn't really exist for it).
+  // Tabs split "Photos" from "About" so the info (contact, hours,
+  // reviews) is reachable immediately rather than buried under a
+  // gallery scroll — every tier gets this now, not just paid ones (see
+  // the layout branch below for why that changed).
   const [activeTab, setActiveTab] = useState<"photos" | "about">("photos");
 
   const loadReviews = () => api.reviews.forBusiness(id).then(setReviews);
@@ -191,8 +189,6 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
           pattern as the browse cards, rather than in the action row
           below, which is now just Directions/Call/Share. */}
       {(() => {
-        const isPaidTier = business.tier !== "STARTER";
-
         const galleryBlock = (
           <div className="relative px-11 pt-4 max-md:px-4">
             <MasonryGallery media={galleryMedia} businessName={business.name} />
@@ -502,24 +498,14 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
           </>
         );
 
-        if (!isPaidTier) {
-          // Starter: unchanged layout — gallery, then name/status, then
-          // everything else, one continuous scroll. Starter's 5-photo
-          // cap means the "long scroll before you reach the info"
-          // problem tabs solve just doesn't really exist for it.
-          return (
-            <>
-              {galleryBlock}
-              {nameStatusBlock}
-              {aboutContentBlock}
-            </>
-          );
-        }
-
-        // Growth/Premium: name/status/actions always visible up top
-        // (core identity info, useful regardless of which tab is
-        // active), then a Photos/About tab switcher so a big gallery
-        // never buries the actual business info under a long scroll.
+        // Same Photos/About tabbed layout for every tier now — Starter
+        // used to get a single continuous scroll instead, on the theory
+        // that a 5-photo cap was short enough not to bury the business
+        // info below it. That assumption doesn't hold now that the
+        // gallery images themselves are bigger/tighter (Val, Sep 2026):
+        // even 5 larger photos can push contact/hours/reviews further
+        // down than they used to, so every tier gets the same tab
+        // switcher rather than only paid ones.
         return (
           <>
             {nameStatusBlock}

@@ -828,7 +828,7 @@ function MediaSection({
 
       {lightboxIndex != null && (
         <Lightbox
-          images={photos.map((m) => m.url)}
+          media={photos.map((m) => ({ url: m.url, type: "PHOTO" as const }))}
           startIndex={lightboxIndex}
           alt="Business photo"
           onClose={() => setLightboxIndex(null)}
@@ -899,7 +899,7 @@ function MediaSection({
           </div>
           {flaggedLightboxSrc && (
             <Lightbox
-              images={[flaggedLightboxSrc]}
+              media={[{ url: flaggedLightboxSrc, type: "PHOTO" }]}
               alt="Flagged photo"
               onClose={() => setFlaggedLightboxSrc(null)}
             />
