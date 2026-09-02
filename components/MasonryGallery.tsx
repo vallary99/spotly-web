@@ -54,7 +54,24 @@ export function MasonryGallery({
       {/* Tighter on mobile specifically (smaller gap, larger radius,
           closer to edge-to-edge) — desktop's spacing/radius (sm: and up)
           is untouched from before. */}
-      <div className="columns-2 gap-1.5 sm:columns-2 sm:gap-3 md:columns-3 lg:columns-4">
+      {/* Column count adapts to how many items there actually are — a
+          single photo forced into a 2-column layout only fills half the
+          width and looks stranded (with the floating save heart below
+          then floating disconnected in the empty half, since it's
+          positioned relative to the full-width container). Only an
+          issue on mobile, where a photo this narrow feels genuinely
+          undersized — desktop has plenty of width either way, so it
+          keeps the normal grid at every item count (Val, Sep 2026:
+          "full width should only apply on mobile"). One photo gets full
+          width below the sm breakpoint only; sm and up always uses the
+          same responsive column counts regardless of item count. */}
+      <div
+        className={
+          visible.length === 1
+            ? "columns-1 gap-1.5 sm:columns-2 sm:gap-3 md:columns-3 lg:columns-4"
+            : "columns-2 gap-1.5 sm:columns-2 sm:gap-3 md:columns-3 lg:columns-4"
+        }
+      >
         {visible.map((item, i) => (
           <button
             key={item.url}
