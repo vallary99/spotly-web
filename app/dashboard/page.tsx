@@ -619,14 +619,39 @@ function VideoSection({
         return;
       }
       const ext = file.name.split(".").pop() || "mp4";
-      const { publicUrl, storageKey } = await api.media.getUploadUrl(businessId, "VIDEO", ext);
-      const formData = new FormData();
-      formData.append("file", file);
-      await api.media.submit(
-        businessId,
-        formData,
-        `type=VIDEO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}&durationSeconds=${durationSeconds}`,
-      );
+      const { publicUrl, storageKey, signedUpload } = await api.media.getUploadUrl(businessId, "VIDEO", ext);
+
+      if (signedUpload) {
+        // Straight to Cloudinary, never through this app's own API —
+        // that's what actually avoids Vercel's 4.5MB request body cap.
+        // The upload itself uses plain fetch rather than the api.ts
+        // request() helper, since this isn't a call to our API at all.
+        const cloudinaryForm = new FormData();
+        cloudinaryForm.append("file", file);
+        cloudinaryForm.append("api_key", signedUpload.apiKey);
+        cloudinaryForm.append("timestamp", String(signedUpload.timestamp));
+        cloudinaryForm.append("signature", signedUpload.signature);
+        cloudinaryForm.append("public_id", signedUpload.publicId);
+        const cloudinaryRes = await fetch(signedUpload.cloudinaryUploadUrl, { method: "POST", body: cloudinaryForm });
+        if (!cloudinaryRes.ok) {
+          throw new Error("Couldn't upload that video, try again.");
+        }
+        // Confirms with our API afterward — small JSON, no file bytes —
+        // so the (duration-only) quality gate can run and the DB row
+        // gets created. A rejection here deletes the file Cloudinary
+        // already has, rather than never having accepted it.
+        await api.media.confirmVideoUpload(businessId, { url: publicUrl, storageKey, durationSeconds });
+      } else {
+        // Cloudinary isn't configured (local dev default) — same
+        // multipart flow this always used, completely unchanged.
+        const formData = new FormData();
+        formData.append("file", file);
+        await api.media.submit(
+          businessId,
+          formData,
+          `type=VIDEO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}&durationSeconds=${durationSeconds}`,
+        );
+      }
       showToast("Video published.");
       onChanged();
     } catch (err) {

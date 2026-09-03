@@ -344,12 +344,32 @@ export const api = {
     ),
   media: {
     getUploadUrl: (businessId: string, type: "PHOTO" | "VIDEO", ext: string) =>
-      request<{ uploadUrl: string; publicUrl: string; storageKey: string }>(
-        `/businesses/${businessId}/media/upload-url?type=${type}&ext=${ext}`,
-        { method: "POST" },
-      ),
+      request<{
+        uploadUrl: string;
+        publicUrl: string;
+        storageKey: string;
+        simulated?: boolean;
+        // Present only for VIDEO when Cloudinary is actually configured
+        // server-side — everything needed to upload the file straight to
+        // Cloudinary from the browser, bypassing this API's own request
+        // body entirely (Vercel's 4.5MB serverless function body limit,
+        // Val, Sep 2026 — routinely too small for even a short video,
+        // never a problem locally where no such platform limit exists).
+        // Omitted when Cloudinary isn't configured (local dev default),
+        // in which case the caller falls back to the same multipart
+        // flow it always used.
+        signedUpload?: {
+          cloudinaryUploadUrl: string;
+          apiKey: string;
+          timestamp: number;
+          signature: string;
+          publicId: string;
+        };
+      }>(`/businesses/${businessId}/media/upload-url?type=${type}&ext=${ext}`, { method: "POST" }),
     submit: (businessId: string, formData: FormData, query: string) =>
       request<Media>(`/businesses/${businessId}/media?${query}`, { method: "POST", body: formData }),
+    confirmVideoUpload: (businessId: string, dto: { url: string; storageKey: string; durationSeconds: number }) =>
+      request<Media>(`/businesses/${businessId}/media/confirm-video`, { method: "POST", body: JSON.stringify(dto) }),
     remove: (businessId: string, mediaId: string) =>
       request(`/businesses/${businessId}/media/${mediaId}`, { method: "DELETE" }),
   },
