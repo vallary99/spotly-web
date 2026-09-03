@@ -216,8 +216,8 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                 the button's spot never depends on how long the name is
                 or whether it wraps; the name just gets right-padding so
                 its text doesn't run under the button. */}
-            <div className="relative pr-12">
-              <h1 className="text-2xl text-warm-brown sm:text-[2rem]">{business.name}</h1>
+            <div className="relative pr-11 sm:pr-12">
+              <h1 className="text-xl text-warm-brown sm:text-[2rem]">{business.name}</h1>
               {isOwnBusiness && (
                 <span className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-[rgba(93,96,65,0.12)] px-3.5 py-1 text-xs font-semibold text-olive">
                   <i className="bi bi-shop" /> This is your business
@@ -228,7 +228,7 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                   onClick={handleSave}
                   disabled={saveBusy}
                   aria-label={saved ? "Unsave" : "Save"}
-                  className={`absolute right-0 top-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-base transition ${
+                  className={`absolute right-0 top-0 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm transition sm:h-10 sm:w-10 sm:text-base ${
                     saved
                       ? "border-terracotta bg-terracotta text-white"
                       : "border-border bg-surface hover:border-terracotta hover:text-terracotta"
@@ -269,13 +269,13 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                 narrowest phones rather than ever breaking onto a new
                 line. */}
             <div className="mt-5 flex flex-nowrap gap-2 overflow-x-auto pb-1 sm:gap-2.5">
-              <button onClick={handleCall} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
+              <button onClick={handleCall} className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-[0.82rem] font-semibold transition hover:border-terracotta hover:text-terracotta sm:gap-2 sm:px-[18px] sm:py-2.5 sm:text-sm">
                 <i className="bi bi-telephone" /> Call
               </button>
-              <button onClick={handleWhatsapp} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
+              <button onClick={handleWhatsapp} className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-[0.82rem] font-semibold transition hover:border-terracotta hover:text-terracotta sm:gap-2 sm:px-[18px] sm:py-2.5 sm:text-sm">
                 <i className="bi bi-whatsapp" /> WhatsApp
               </button>
-              <button onClick={handleShare} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
+              <button onClick={handleShare} className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-[0.82rem] font-semibold transition hover:border-terracotta hover:text-terracotta sm:gap-2 sm:px-[18px] sm:py-2.5 sm:text-sm">
                 <i className="bi bi-share" /> Share
               </button>
             </div>
