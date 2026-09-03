@@ -79,10 +79,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     },
   };
 
+  // Separate from WebSite above — this describes the BUSINESS behind
+  // the site, not the site itself, and `sameAs` is what actually links
+  // this domain to the TikTok/Instagram/LinkedIn accounts already added
+  // in Search Console: without it, Google has to guess whether
+  // "spotly.co.ke" and "@spotly.ke" on Instagram are the same real
+  // thing; with it, that's stated directly. Also the standard
+  // prerequisite (not a guarantee) for a Knowledge Panel to ever show
+  // up for a "Spotly" search.
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Spotly",
+    url: SITE_URL,
+    logo: `${SITE_URL}/spotly-logo.png`,
+    email: "hello@spotly.co.ke",
+    sameAs: [
+      "https://www.tiktok.com/@spotly.254",
+      "https://www.instagram.com/spotly.ke",
+      "https://www.linkedin.com/company/spotly-ke/",
+    ],
+  };
+
   return (
     <html lang="en" className="h-full antialiased">
       <head>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         {/* Cinzel + Inter, loaded the same way as the original prototypes
             (plain <link>, not next/font) so this works identically
             regardless of network restrictions in any given environment. */}
