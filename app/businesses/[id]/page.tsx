@@ -207,17 +207,19 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
 
         const nameStatusBlock = (
           <div className="px-11 pt-[26px] max-md:px-4">
-            {/* Save moved up next to the name (Val, Sep 2026) — out of
-                the Call/WhatsApp/Share row entirely, which now fits
-                comfortably in one row on mobile instead of wrapping to
-                two. An icon-only button here (no text label) reads
-                clearly enough next to the title without needing "Save"
-                spelled out, the same way a title-adjacent favorite
-                icon works on most listing pages. */}
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Save sits in a fixed top-right spot via absolute
+                positioning, NOT as a flex sibling of the name — a flex
+                sibling wraps onto its own line the moment a longer name
+                doesn't leave room for both on one row (exactly what was
+                happening: the button stranding itself far below the
+                name with a big empty gap). Absolute positioning means
+                the button's spot never depends on how long the name is
+                or whether it wraps; the name just gets right-padding so
+                its text doesn't run under the button. */}
+            <div className="relative pr-12">
               <h1 className="text-2xl text-warm-brown sm:text-[2rem]">{business.name}</h1>
               {isOwnBusiness && (
-                <span className="flex items-center gap-1.5 rounded-full bg-[rgba(93,96,65,0.12)] px-3.5 py-1 text-xs font-semibold text-olive">
+                <span className="mt-2 flex w-fit items-center gap-1.5 rounded-full bg-[rgba(93,96,65,0.12)] px-3.5 py-1 text-xs font-semibold text-olive">
                   <i className="bi bi-shop" /> This is your business
                 </span>
               )}
@@ -226,7 +228,7 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                   onClick={handleSave}
                   disabled={saveBusy}
                   aria-label={saved ? "Unsave" : "Save"}
-                  className={`ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-base transition ${
+                  className={`absolute right-0 top-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-base transition ${
                     saved
                       ? "border-terracotta bg-terracotta text-white"
                       : "border-border bg-surface hover:border-terracotta hover:text-terracotta"
@@ -260,15 +262,20 @@ export default function BusinessDetailsPage({ params }: { params: Promise<{ id: 
                 categories, budget, and reservation policy all moved
                 into the About tab (Contact and Details cards) — this
                 row's job now is just "the few things someone wants to
-                do immediately," not "show everything at once." */}
-            <div className="mt-5 flex flex-wrap gap-2.5">
-              <button onClick={handleCall} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
+                do immediately," not "show everything at once." Never
+                wraps to a second row (Val, Sep 2026) — tighter padding
+                on mobile so all three normally fit on their own without
+                needing it, and a horizontal scroll as a fallback on the
+                narrowest phones rather than ever breaking onto a new
+                line. */}
+            <div className="mt-5 flex flex-nowrap gap-2 overflow-x-auto pb-1 sm:gap-2.5">
+              <button onClick={handleCall} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
                 <i className="bi bi-telephone" /> Call
               </button>
-              <button onClick={handleWhatsapp} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
+              <button onClick={handleWhatsapp} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
                 <i className="bi bi-whatsapp" /> WhatsApp
               </button>
-              <button onClick={handleShare} className="flex items-center gap-2 rounded-full border border-border bg-surface px-[18px] py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta">
+              <button onClick={handleShare} className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface px-3.5 py-2.5 text-sm font-semibold transition hover:border-terracotta hover:text-terracotta sm:px-[18px]">
                 <i className="bi bi-share" /> Share
               </button>
             </div>
