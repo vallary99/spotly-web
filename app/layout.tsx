@@ -3,9 +3,9 @@ import "./globals.css";
 import { AppProviders } from "@/components/AppProviders";
 
 export const metadata: Metadata = {
-  title: "Spotly, Find It. Book It. Spotly.",
+  title: "Spotly | Discover Places, Activities & Events in Nairobi",
   description:
-    "Discover Nairobi's best business",
+    "Discover Nairobi differently with Spotly. Find unique places, exciting activities, hidden gems and upcoming events, all in one place. Whether you're looking for somewhere to eat, something fun to do, or your next favourite spot, Spotly helps you discover what's around you.",
   icons: {
     icon: [
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
