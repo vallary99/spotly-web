@@ -9,10 +9,12 @@ import { BusinessCard } from "@/components/BusinessCard";
 import { BusinessCardRowSkeleton } from "@/components/Skeleton";
 import { ExperienceCard } from "@/components/ExperienceCard";
 import { Select } from "@/components/Select";
+import { useToast } from "@/components/ToastContext";
 import { api, type HomeResponse, type Business } from "@/lib/api";
 import { HERO_IMAGES } from "@/lib/placeholders";
 import { computeOpenStatus } from "@/lib/hours";
 import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
+import { getCurrentPosition, distanceKm } from "@/lib/location";
 
 // MVP quick filters (PRD Section 6 / BRD FR-2.2), grouped thematically
 // rather than one-pill-per-category so the row stays intuitive and short
@@ -22,9 +24,12 @@ import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
 // business categorized Nightclub, Karaoke Bar, Rooftop Lounge, etc, not
 // just an exact "Nightlife" category that doesn't actually exist.
 //
-// "Nearby" doesn't map to a server-side filter, it needs real
-// geolocation (deferred, no mapping provider in MVP per BRD Section 11),
-// so it just shows the default unfiltered view. "Trending" was removed
+// "Nearby" sorts the current rails by real distance from the user's
+// browser-reported location (OpenStreetMap-based location capture at
+// onboarding/dashboard + the free Geolocation API here — no paid map
+// provider needed for this specific filter, Val, Sep 2026). Businesses
+// with no coordinates set are excluded rather than guessed at; see
+// sortByNearby below. "Trending" was removed
 // from this row entirely, the "Trending This Week" rail below already
 // covers that, a duplicate quick-filter pill for the same thing was
 // redundant. "Open Now" filters client-side over whatever the current
@@ -62,7 +67,25 @@ function filterOpenNow(list: Business[]): Business[] {
   return list.filter((b) => computeOpenStatus(b.hours)?.open === true);
 }
 
+// Businesses with no coordinates set are excluded rather than guessed
+// at — no "assume city center" fallback, since a wrong guess here
+// actively undermines the one thing this filter promises (Val, Sep
+// 2026). No radius cutoff either (there was one; removed) — with only
+// a handful of businesses having set a real location so far, a fixed
+// cutoff could easily leave just one (or zero) results, which reads as
+// "broken" rather than "sorted." Nearest-to-furthest, everyone with
+// coordinates included, is what actually stays useful while adoption
+// of the location feature itself is still growing.
+function sortByNearby(list: Business[], userLocation: { latitude: number; longitude: number }): Business[] {
+  return list
+    .filter((b): b is Business & { latitude: number; longitude: number } => b.latitude != null && b.longitude != null)
+    .map((b) => ({ business: b, km: distanceKm(userLocation, { latitude: b.latitude, longitude: b.longitude }) }))
+    .sort((a, b) => a.km - b.km)
+    .map((entry) => entry.business);
+}
+
 export default function HomePage() {
+  const { showToast } = useToast();
   const [data, setData] = useState<HomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   // activeCategory: single-select among the admin-managed quick filter
@@ -80,8 +103,29 @@ export default function HomePage() {
   } | null>(null);
   const [city, setCity] = useState(CITIES[0]);
   const [neighborhood, setNeighborhood] = useState(""); // "" = all areas within the city
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locatingNearby, setLocatingNearby] = useState(false);
 
   const toggleMeta = (key: string) => {
+    if (key === "nearby" && !activeMeta.has("nearby") && !userLocation) {
+      // Turning Nearby ON for the first time — get the browser's
+      // location before actually enabling the toggle, rather than
+      // enabling it and then having nothing to sort by. If the user
+      // denies/it fails, the toggle just never turns on rather than
+      // turning on and silently doing nothing (the exact non-functional
+      // state this replaced, Val, Sep 2026).
+      setLocatingNearby(true);
+      getCurrentPosition()
+        .then((pos) => {
+          setUserLocation(pos);
+          setActiveMeta((prev) => new Set(prev).add("nearby"));
+        })
+        .catch((err) => {
+          showToast(err instanceof Error ? err.message : "Couldn't get your location.");
+        })
+        .finally(() => setLocatingNearby(false));
+      return;
+    }
     setActiveMeta((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -110,6 +154,7 @@ export default function HomePage() {
     setLoading(true);
     const filterDef = data?.quickFilters.find((f) => f.id === activeCategory);
     const openNowOn = activeMeta.has("openNow");
+    const nearbyOn = activeMeta.has("nearby") && userLocation != null;
     api
       .home({
         city,
@@ -118,21 +163,24 @@ export default function HomePage() {
         ...(activeMeta.has("hiddenGems") ? { isHiddenGem: true } : {}),
       })
       .then((res) => {
+        let trendingThisWeek = res.rails.trendingThisWeek;
+        let popularNearYou = res.rails.popularNearYou;
         if (openNowOn) {
-          setData({
-            ...res,
-            rails: {
-              ...res.rails,
-              trendingThisWeek: filterOpenNow(res.rails.trendingThisWeek),
-              popularNearYou: filterOpenNow(res.rails.popularNearYou),
-            },
-          });
+          trendingThisWeek = filterOpenNow(trendingThisWeek);
+          popularNearYou = filterOpenNow(popularNearYou);
+        }
+        if (nearbyOn) {
+          trendingThisWeek = sortByNearby(trendingThisWeek, userLocation!);
+          popularNearYou = sortByNearby(popularNearYou, userLocation!);
+        }
+        if (openNowOn || nearbyOn) {
+          setData({ ...res, rails: { ...res.rails, trendingThisWeek, popularNearYou } });
         } else {
           setData(res);
         }
       })
       .finally(() => setLoading(false));
-  }, [city, neighborhood, activeCategory, activeMeta]);
+  }, [city, neighborhood, activeCategory, activeMeta, userLocation]);
 
   return (
     <>
@@ -209,15 +257,16 @@ export default function HomePage() {
                 <button
                   key={f.key}
                   onClick={() => toggleMeta(f.key)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium backdrop-blur-sm transition ${
+                  disabled={f.key === "nearby" && locatingNearby}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium backdrop-blur-sm transition disabled:opacity-70 ${
                     activeMeta.has(f.key)
                       ? "border-olive bg-olive text-white"
                       : "border-white/40 bg-white/12 text-white hover:bg-white/20"
                   }`}
                   aria-pressed={activeMeta.has(f.key)}
                 >
-                  <i className={`bi ${f.icon}`} />
-                  {f.label}
+                  <i className={`bi ${f.key === "nearby" && locatingNearby ? "bi-arrow-repeat" : f.icon}`} />
+                  {f.key === "nearby" && locatingNearby ? "Finding you…" : f.label}
                 </button>
               ))}
             </div>

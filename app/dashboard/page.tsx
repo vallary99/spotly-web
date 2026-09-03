@@ -2,16 +2,22 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { useAuth } from "@/components/AuthContext";
 import { useToast } from "@/components/ToastContext";
 import { api, ApiError, type Business, type Experience, type Media } from "@/lib/api";
+import { geocodeAddress } from "@/lib/location";
 import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
+
+const LocationPickerModal = dynamic(() => import("@/components/LocationPickerModal").then((m) => m.LocationPickerModal), {
+  ssr: false,
+});
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -311,6 +317,30 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
   const [whatsappPhone, setWhatsappPhone] = useState(business.whatsappPhone || "");
   const [email, setEmail] = useState(business.email || "");
   const [address, setAddress] = useState(business.address || "");
+  const [latitude, setLatitude] = useState<number | null>(business.latitude ?? null);
+  const [longitude, setLongitude] = useState<number | null>(business.longitude ?? null);
+  const [geocoding, setGeocoding] = useState(false);
+  // The map only ever renders inside the popup now — this just
+  // controls whether that popup is open, not whether a location has
+  // been set (that's latitude/longitude themselves).
+  const [mapOpen, setMapOpen] = useState(false);
+
+  // Fires on an explicit button press, not on blur.
+  const handleShowMap = async () => {
+    setGeocoding(true);
+    try {
+      const result = address.trim() ? await geocodeAddress(address) : null;
+      if (result) {
+        setLatitude(result.latitude);
+        setLongitude(result.longitude);
+      } else if (address.trim()) {
+        showToast("Couldn't find that address on the map — drag the pin or use your current location instead.");
+      }
+    } finally {
+      setGeocoding(false);
+      setMapOpen(true);
+    }
+  };
   const [website, setWebsite] = useState(business.website || "");
   const [reservationPolicy, setReservationPolicy] = useState<string>(business.reservationPolicy || "");
   const [budgetMin, setBudgetMin] = useState<string>(business.budgetMin ? String(business.budgetMin) : "");
@@ -372,6 +402,8 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
         email,
         address,
         website,
+        latitude: latitude ?? undefined,
+        longitude: longitude ?? undefined,
         hours,
         amenities,
         reservationPolicy: reservationPolicy || undefined,
@@ -449,6 +481,42 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
         </label>
       </div>
+
+      <div className="mb-4">
+        <span className="mb-1 block text-xs font-semibold text-warm-clay">Location on map</span>
+        {latitude != null ? (
+          <div className="flex items-center justify-between rounded-full border border-border bg-cream px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm text-text">
+              <i className="bi bi-geo-alt-fill text-terracotta" /> Location set
+            </span>
+            <button type="button" onClick={() => setMapOpen(true)} className="text-sm font-semibold text-terracotta hover:underline">
+              Change
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleShowMap}
+            disabled={geocoding}
+            className="flex items-center gap-2 rounded-full border border-terracotta bg-[rgba(199,101,58,0.08)] px-5 py-2.5 text-sm font-semibold text-terracotta transition hover:bg-[rgba(199,101,58,0.14)] disabled:opacity-60"
+          >
+            <i className={`bi ${geocoding ? "bi-arrow-repeat" : "bi-map"}`} />
+            {geocoding ? "Looking up that address…" : "Show on map"}
+          </button>
+        )}
+      </div>
+
+      {mapOpen && (
+        <LocationPickerModal
+          latitude={latitude}
+          longitude={longitude}
+          onChange={(lat, lng) => {
+            setLatitude(lat);
+            setLongitude(lng);
+          }}
+          onClose={() => setMapOpen(false)}
+        />
+      )}
 
       <label className="mb-4 block">
         <span className="mb-1 block text-xs font-semibold text-warm-clay">Description</span>

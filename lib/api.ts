@@ -2,7 +2,7 @@
 // Attaches the JWT automatically when present and normalizes error
 // handling so components can just `await` and catch a single error shape.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export class ApiError extends Error {
   status: number;

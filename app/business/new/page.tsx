@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -8,7 +9,15 @@ import { useAuth } from "@/components/AuthContext";
 import { useToast } from "@/components/ToastContext";
 import { api, ApiError } from "@/lib/api";
 import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
+import { geocodeAddress } from "@/lib/location";
 import { Select } from "@/components/Select";
+
+// Leaflet touches `window` at import time, so it can never render
+// during SSR — dynamically imported with ssr:false rather than a plain
+// import, which would crash the server render entirely.
+const LocationPickerModal = dynamic(() => import("@/components/LocationPickerModal").then((m) => m.LocationPickerModal), {
+  ssr: false,
+});
 
 // Used only until the real list loads from GET /businesses/categories
 const FALLBACK_CATEGORIES = [
@@ -51,6 +60,39 @@ export default function NewBusinessPage() {
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  // The map only ever renders inside the popup now — this just
+  // controls whether that popup is open, not whether a location has
+  // been set (that's latitude/longitude themselves).
+  const [mapOpen, setMapOpen] = useState(false);
+
+  // Fires on an explicit button press, not on blur. Always just a
+  // starting point: they can still drag it or use "my location" if the
+  // guess is off, which it sometimes will be — a lot of addresses here
+  // are landmark-based ("Karen Landmark Building") rather than a clean
+  // street+number, and free geocoding is honest about being
+  // approximate for those.
+  const handleShowMap = async () => {
+    setGeocoding(true);
+    try {
+      const result = address.trim() ? await geocodeAddress(address) : null;
+      if (result) {
+        setLatitude(result.latitude);
+        setLongitude(result.longitude);
+      } else if (address.trim()) {
+        // Genuinely no visible feedback before this — a failed lookup
+        // and a successful-but-silent one looked identical, which made
+        // this exact class of bug hard to tell apart from "working as
+        // intended, just no match" (Val, Sep 2026).
+        showToast("Couldn't find that address on the map — drag the pin or use your current location instead.");
+      }
+    } finally {
+      setGeocoding(false);
+      setMapOpen(true); // open the popup either way, so they can place the pin manually if the lookup didn't land
+    }
+  };
   const [website, setWebsite] = useState("");
   const [city, setCity] = useState(CITIES[0]);
   const [neighborhood, setNeighborhood] = useState(LOCATIONS_BY_CITY[CITIES[0]][0]);
@@ -134,6 +176,8 @@ export default function NewBusinessPage() {
         whatsappPhone: whatsappPhone || undefined,
         email: email || undefined,
         address: address || undefined,
+        latitude: latitude ?? undefined,
+        longitude: longitude ?? undefined,
         website: website || undefined,
         city,
         neighborhood,
@@ -273,9 +317,49 @@ export default function NewBusinessPage() {
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="hello@business.co.ke" />
             </Field>
             <Field label="Address">
-              <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="14 Wood Avenue, Kilimani" />
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className={inputClass}
+                placeholder="14 Wood Avenue, Kilimani"
+              />
             </Field>
           </div>
+
+          <Field label="Location on map">
+            {latitude != null ? (
+              <div className="flex items-center justify-between rounded-full border border-border bg-cream px-4 py-2.5">
+                <span className="flex items-center gap-2 text-sm text-text">
+                  <i className="bi bi-geo-alt-fill text-terracotta" /> Location set
+                </span>
+                <button type="button" onClick={() => setMapOpen(true)} className="text-sm font-semibold text-terracotta hover:underline">
+                  Change
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleShowMap}
+                disabled={geocoding}
+                className="flex items-center gap-2 rounded-full border border-terracotta bg-[rgba(199,101,58,0.08)] px-5 py-2.5 text-sm font-semibold text-terracotta transition hover:bg-[rgba(199,101,58,0.14)] disabled:opacity-60"
+              >
+                <i className={`bi ${geocoding ? "bi-arrow-repeat" : "bi-map"}`} />
+                {geocoding ? "Looking up that address…" : "Show on map"}
+              </button>
+            )}
+          </Field>
+
+          {mapOpen && (
+            <LocationPickerModal
+              latitude={latitude}
+              longitude={longitude}
+              onChange={(lat, lng) => {
+                setLatitude(lat);
+                setLongitude(lng);
+              }}
+              onClose={() => setMapOpen(false)}
+            />
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Website (optional)">
