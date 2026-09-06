@@ -112,8 +112,8 @@ export function BusinessCard({ business }: { business: Business }) {
           <div>
             <p className="mb-0.5 font-semibold">{business.name}</p>
             <p className="text-[0.8rem] text-warm-clay">
-              {business.categories?.[0]}
-              {business.categories?.length > 1 && ` +${business.categories.length - 1}`}
+              {business.categories?.slice(0, 2).join(", ")}
+              {business.categories?.length > 2 && ` +${business.categories.length - 2}`}
             </p>
           </div>
           {business.reviewCount ? (

@@ -319,6 +319,7 @@ export const api = {
         status: string;
         isGrandfathered: boolean;
         discountPercent: number;
+        gracePeriodEndsAt: string | null;
         firstCohortPremiumTrial: boolean;
         trialOffer: { tier: string; days: number } | null;
         activeTrial: { tier: string; endsAt: string } | null;

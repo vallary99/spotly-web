@@ -91,6 +91,7 @@ export default function DashboardPage() {
     shouldPromptUpgrade: boolean;
     upgradeMessage: string | null;
     discountPercent: number;
+    gracePeriodEndsAt: string | null;
     firstCohortPremiumTrial: boolean;
     trialOffer: { tier: string; days: number } | null;
     activeTrial: { tier: string; endsAt: string } | null;
@@ -1354,6 +1355,100 @@ function ExperienceManager({
 
 // ---------- Subscription / payment ----------
 
+// Shared perks card — used for the business's current tier (no button),
+// a genuinely selectable upgrade (button, part of the M-Pesa flow
+// below), or a locked preview (perks visible, but not payable — shown
+// while ANY trial is active, since payment is blocked globally during
+// a trial regardless of which tier's card this is, Val, Sep 2026).
+function PlanCard({
+  tierKey,
+  tiers,
+  mode,
+  selected,
+  onSelect,
+  discountPercent,
+}: {
+  tierKey: "STARTER" | "GROWTH" | "PREMIUM";
+  tiers: Record<string, TierLimits> | null;
+  mode: "current" | "selectable" | "locked";
+  selected?: boolean;
+  onSelect?: () => void;
+  discountPercent?: number;
+}) {
+  const t = tiers?.[tierKey];
+  if (!t) return null;
+
+  const priceDisplay =
+    t.priceKes === 0 ? (
+      "Free"
+    ) : mode === "selectable" && discountPercent ? (
+      <>
+        <span className="mr-1.5 text-xs font-normal text-warm-clay line-through">KES {t.priceKes.toLocaleString()}</span>
+        KES {Math.round(t.priceKes * (1 - discountPercent / 100)).toLocaleString()}/mo
+      </>
+    ) : (
+      `KES ${t.priceKes.toLocaleString()}/mo`
+    );
+
+  const inner = (
+    <>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-2 font-semibold text-warm-brown">
+          {mode === "selectable" && selected && <i className="bi bi-check-circle-fill text-terracotta" />}
+          {tierKey === "STARTER" ? "Starter" : tierKey === "GROWTH" ? "🌟 Featured" : "✨ Premium"}
+        </span>
+        <span className="text-sm font-semibold text-warm-brown">{priceDisplay}</span>
+      </div>
+      {mode === "current" && (
+        <span className="mb-2 inline-block rounded-full bg-[rgba(93,96,65,0.12)] px-2.5 py-1 text-xs font-semibold text-olive">
+          Current plan
+        </span>
+      )}
+      {mode === "locked" && (
+        <span className="mb-2 inline-block rounded-full bg-border px-2.5 py-1 text-xs font-semibold text-warm-clay">
+          Available once your trial ends
+        </span>
+      )}
+      <ul className="space-y-1 text-sm text-warm-clay">
+        <li className="flex items-center gap-1.5">
+          <i className="bi bi-camera text-xs" /> Up to {t.photos} photos
+        </li>
+        <li className="flex items-center gap-1.5">
+          <i className="bi bi-camera-reels text-xs" />
+          Up to {t.videos} video{t.videos === 1 ? "" : "s"}, {t.videoMaxSeconds} sec each
+        </li>
+        <li className="flex items-center gap-1.5">
+          <i className="bi bi-ticket-perforated text-xs" />
+          Up to {t.concurrentExperiences ?? t.monthlyExperiencesIncluded ?? 0} active experiences
+        </li>
+        {t.extraFeatures.map((f) => (
+          <li key={f} className="flex items-center gap-1.5">
+            <i className="bi bi-star text-xs" /> {f}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
+  const baseClass = "rounded-2xl border p-4 text-left transition";
+  if (mode === "selectable") {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`${baseClass} ${selected ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-cream hover:border-warm-clay"}`}
+      >
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <div className={`${baseClass} ${mode === "locked" ? "border-dashed border-border bg-cream opacity-70" : "border-border bg-cream"}`}>
+      {inner}
+    </div>
+  );
+}
+
 function SubscriptionPanel({
   business,
   tiers,
@@ -1370,6 +1465,8 @@ function SubscriptionPanel({
     firstCohortPremiumTrial: boolean;
     trialOffer: { tier: string; days: number } | null;
     activeTrial: { tier: string; endsAt: string } | null;
+    status?: string;
+    gracePeriodEndsAt?: string | null;
   } | null;
   onUpgraded: () => void;
   showToast: (msg: string) => void;
@@ -1436,9 +1533,22 @@ function SubscriptionPanel({
     }
   };
 
-  const daysLeft = subStatus?.activeTrial
-    ? Math.max(0, Math.ceil((new Date(subStatus.activeTrial.endsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+  const isTrialing = !!subStatus?.activeTrial;
+  const isGracePeriod = subStatus?.status === "GRACE_PERIOD";
+  // Whichever tier's perks are the ones actually in effect right now —
+  // the trialed tier while trialing, otherwise whatever's really paid
+  // for (or Starter, by default).
+  const effectiveTier = (subStatus?.activeTrial?.tier ?? business.tier) as "STARTER" | "GROWTH" | "PREMIUM";
+  // One shared countdown concept for two different reasons a tier could
+  // be about to revert to Starter: a trial running out, or a paid plan
+  // in its post-missed-payment grace period (Val, Sep 2026: "the
+  // countdown is for both trial and plan"). Only ever shown in the
+  // final week either way — see showCountdown below.
+  const countdownEndsAt = subStatus?.activeTrial?.endsAt ?? (isGracePeriod ? subStatus?.gracePeriodEndsAt : null) ?? null;
+  const daysLeft = countdownEndsAt
+    ? Math.max(0, Math.ceil((new Date(countdownEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
     : null;
+  const showCountdown = daysLeft != null && daysLeft <= 7;
 
   // Val, Sep 2026: "for the first 100 businesses... disabling the other
   // tiers. But they still have to activate the option." So while a
@@ -1449,6 +1559,20 @@ function SubscriptionPanel({
   // normal tier-picking behavior returns.
   const pendingFirstCohortOffer = !!(business.firstCohortPremiumTrial && subStatus?.trialOffer && !subStatus?.activeTrial);
 
+  // Starter with nothing pending shows all three tiers side by side —
+  // its own perks for reference, then Growth/Premium to upgrade into
+  // (Val, Sep 2026: "if on a free plan and no free trial available").
+  // Starter WITH a pending (non-first-cohort) trial offer keeps the
+  // narrower, pre-existing two-card Growth/Premium picker instead —
+  // that combination wasn't part of what changed here.
+  const showThreeCardStarter = business.tier === "STARTER" && !subStatus?.trialOffer && !pendingFirstCohortOffer;
+  const showLegacyStarterUpgrade = business.tier === "STARTER" && !!subStatus?.trialOffer && !pendingFirstCohortOffer;
+  const showGrowthUpgrade = business.tier === "GROWTH";
+  // Payment itself is blocked globally during any active trial — shown
+  // as a locked preview instead (Val, Sep 2026), and the M-Pesa form
+  // below has nothing to attach to in that state, so it's hidden too.
+  const showPaymentForm = !isTrialing && (showThreeCardStarter || showLegacyStarterUpgrade || showGrowthUpgrade);
+
   return (
     <div className="rounded-spotly border border-border bg-surface p-6">
       <h2 className="mb-1 text-xl text-warm-brown">Subscription</h2>
@@ -1458,16 +1582,28 @@ function SubscriptionPanel({
         {!!business.discountPercent && ` · ${business.discountPercent}% off`}
       </p>
 
-      {/* Active trial — a countdown, not another offer to choose. */}
-      {subStatus?.activeTrial && (
+      {/* Always shows what the current (or currently-trialed) tier
+          actually includes — replacing what used to be just a bare
+          "Trialing Premium, 27 days left" line with no context on what
+          that tier even gets you (Val, Sep 2026). The countdown itself
+          only joins this once 7 days or fewer remain, whether that's a
+          trial ending or a grace-period plan about to lapse. */}
+      {tiers?.[effectiveTier] && (
         <div className="mb-5 rounded-2xl border border-olive bg-[rgba(93,96,65,0.06)] p-4">
-          <p className="text-sm font-semibold text-olive">
-            <i className="bi bi-stars mr-1.5" />
-            Trialing {tierLabel(subStatus.activeTrial.tier)}, {daysLeft} day{daysLeft === 1 ? "" : "s"} left
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-olive">
+            <i className="bi bi-stars" />
+            {isTrialing ? `Trialing ${tierLabel(effectiveTier)}` : `Your ${tierLabel(effectiveTier)} plan includes`}
           </p>
-          <p className="mt-1 text-xs text-warm-clay">
-            Your trial reverts to the Free package automatically when it ends, unless you upgrade for real before then.
-          </p>
+          <PlanCard tierKey={effectiveTier} tiers={tiers} mode="current" />
+          {showCountdown && (
+            <p className="mt-3 border-t border-border pt-3 text-xs font-semibold text-terracotta">
+              <i className="bi bi-clock-history mr-1" />
+              {daysLeft} day{daysLeft === 1 ? "" : "s"} left —{" "}
+              {isTrialing
+                ? "reverts to Free automatically unless you upgrade for real before then."
+                : "renew now or this plan reverts to Free automatically."}
+            </p>
+          )}
         </div>
       )}
 
@@ -1494,76 +1630,87 @@ function SubscriptionPanel({
         </div>
       )}
 
-      {business.tier !== "PREMIUM" && !pendingFirstCohortOffer && (
+      {showThreeCardStarter && (
         <>
           <p className="mb-1 text-sm font-semibold text-warm-brown">Choose the plan that fits your business.</p>
           <p className="mb-3 text-xs text-warm-clay">
             Upgrade anytime, your current plan stays active until the upgrade is complete.
           </p>
           <div className="mb-4 grid grid-cols-1 gap-3">
-            {(business.tier !== "GROWTH" ? (["GROWTH", "PREMIUM"] as const) : (["PREMIUM"] as const)).map((tierKey) => {
-              const t = tiers?.[tierKey];
-              const selected = targetTier === tierKey;
-              return (
-                <button
-                  key={tierKey}
-                  type="button"
-                  onClick={() => setTargetTier(tierKey)}
-                  className={`rounded-2xl border p-4 text-left transition ${
-                    selected ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-cream hover:border-warm-clay"
-                  }`}
-                >
-                  {!!business.discountPercent && (
-                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-olive px-2.5 py-1 text-xs font-semibold text-white">
-                      <i className="bi bi-tag" /> Try {tierLabel(tierKey)} for {business.discountPercent}% off
-                    </span>
-                  )}
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-2 font-semibold text-warm-brown">
-                      {selected && <i className="bi bi-check-circle-fill text-terracotta" />}
-                      {tierKey === "GROWTH" ? "🌟 Featured" : "✨ Premium"}
-                    </span>
-                    <span className="text-sm font-semibold text-warm-brown">
-                      {t ? (
-                        business.discountPercent ? (
-                          <>
-                            <span className="mr-1.5 text-xs font-normal text-warm-clay line-through">
-                              KES {t.priceKes.toLocaleString()}
-                            </span>
-                            KES {Math.round(t.priceKes * (1 - business.discountPercent / 100)).toLocaleString()}/mo
-                          </>
-                        ) : (
-                          `KES ${t.priceKes.toLocaleString()}/mo`
-                        )
-                      ) : (
-                        "…"
-                      )}
-                    </span>
-                  </div>
-                  {t && (
-                    <ul className="space-y-1 text-sm text-warm-clay">
-                      <li className="flex items-center gap-1.5">
-                        <i className="bi bi-camera text-xs" /> Up to {t.photos} photos
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <i className="bi bi-camera-reels text-xs" />
-                        Up to {t.videos} video{t.videos === 1 ? "" : "s"}, {t.videoMaxSeconds} sec each
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <i className="bi bi-ticket-perforated text-xs" />
-                        Up to {t.concurrentExperiences ?? t.monthlyExperiencesIncluded ?? 0} active experiences
-                      </li>
-                      {t.extraFeatures.map((f) => (
-                        <li key={f} className="flex items-center gap-1.5">
-                          <i className="bi bi-star text-xs" /> {f}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </button>
-              );
-            })}
+            <PlanCard tierKey="STARTER" tiers={tiers} mode="current" />
+            <PlanCard
+              tierKey="GROWTH"
+              tiers={tiers}
+              mode="selectable"
+              selected={targetTier === "GROWTH"}
+              onSelect={() => setTargetTier("GROWTH")}
+              discountPercent={business.discountPercent}
+            />
+            <PlanCard
+              tierKey="PREMIUM"
+              tiers={tiers}
+              mode="selectable"
+              selected={targetTier === "PREMIUM"}
+              onSelect={() => setTargetTier("PREMIUM")}
+              discountPercent={business.discountPercent}
+            />
           </div>
+        </>
+      )}
+
+      {showLegacyStarterUpgrade && (
+        <>
+          <p className="mb-1 text-sm font-semibold text-warm-brown">Choose the plan that fits your business.</p>
+          <p className="mb-3 text-xs text-warm-clay">
+            Upgrade anytime, your current plan stays active until the upgrade is complete.
+          </p>
+          <div className="mb-4 grid grid-cols-1 gap-3">
+            <PlanCard
+              tierKey="GROWTH"
+              tiers={tiers}
+              mode="selectable"
+              selected={targetTier === "GROWTH"}
+              onSelect={() => setTargetTier("GROWTH")}
+              discountPercent={business.discountPercent}
+            />
+            <PlanCard
+              tierKey="PREMIUM"
+              tiers={tiers}
+              mode="selectable"
+              selected={targetTier === "PREMIUM"}
+              onSelect={() => setTargetTier("PREMIUM")}
+              discountPercent={business.discountPercent}
+            />
+          </div>
+        </>
+      )}
+
+      {showGrowthUpgrade && (
+        <>
+          <p className="mb-1 text-sm font-semibold text-warm-brown">
+            {isTrialing ? "What Premium adds on top of Growth." : "Upgrade to Premium."}
+          </p>
+          {!isTrialing && (
+            <p className="mb-3 text-xs text-warm-clay">
+              Upgrade anytime, your current plan stays active until the upgrade is complete.
+            </p>
+          )}
+          <div className="mb-4 grid grid-cols-1 gap-3">
+            <PlanCard tierKey="GROWTH" tiers={tiers} mode="current" />
+            <PlanCard
+              tierKey="PREMIUM"
+              tiers={tiers}
+              mode={isTrialing ? "locked" : "selectable"}
+              selected={targetTier === "PREMIUM"}
+              onSelect={() => setTargetTier("PREMIUM")}
+              discountPercent={business.discountPercent}
+            />
+          </div>
+        </>
+      )}
+
+      {showPaymentForm && (
+        <>
           <label className="mb-3 block">
             <span className="mb-1 block text-xs font-semibold text-warm-clay">M-Pesa phone number</span>
             <input
@@ -1601,6 +1748,7 @@ function SubscriptionPanel({
     </div>
   );
 }
+
 
 const inputClass =
   "w-full rounded-2xl border border-border bg-cream px-4 py-2.5 text-sm outline-none focus:border-terracotta";
