@@ -217,7 +217,7 @@ export interface HomeResponse {
 
 export interface AuthResponse {
   accessToken: string;
-  user: { id: string; email: string; name: string; role: string };
+  user: { id: string; email: string; name: string; role: string; emailVerified: boolean };
 }
 
 // ---------- API calls ----------
@@ -225,7 +225,11 @@ export interface AuthResponse {
 export const api = {
   auth: {
     signup: (dto: { email: string; password: string; name: string }) =>
-      request<AuthResponse>("/auth/signup", { method: "POST", body: JSON.stringify(dto), auth: false }),
+      request<AuthResponse>("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ ...dto, verifyUrlBase: typeof window !== "undefined" ? window.location.origin : "" }),
+        auth: false,
+      }),
     login: (dto: { email: string; password: string }) =>
       request<AuthResponse>("/auth/login", { method: "POST", body: JSON.stringify(dto), auth: false }),
     refresh: () => request<AuthResponse>("/auth/refresh", { method: "POST" }),
@@ -239,6 +243,18 @@ export const api = {
       request<{ message: string }>("/auth/reset-password", {
         method: "POST",
         body: JSON.stringify({ token, newPassword }),
+        auth: false,
+      }),
+    verifyEmail: (token: string) =>
+      request<{ message: string } & AuthResponse>("/auth/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ token }),
+        auth: false,
+      }),
+    resendVerification: (email: string) =>
+      request<{ message: string }>("/auth/resend-verification", {
+        method: "POST",
+        body: JSON.stringify({ email, verifyUrlBase: typeof window !== "undefined" ? window.location.origin : "" }),
         auth: false,
       }),
   },

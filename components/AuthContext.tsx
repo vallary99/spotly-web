@@ -9,6 +9,7 @@ interface User {
   email: string;
   name: string;
   role: string;
+  emailVerified: boolean;
 }
 
 interface AuthContextValue {
@@ -22,6 +23,7 @@ interface AuthContextValue {
   signup: (email: string, password: string, name: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   hydrateFromToken: (token: string) => void;
+  hydrateFromAuthResponse: (res: { accessToken: string; user: User }) => void;
   refreshAuth: () => Promise<void>;
   logout: () => void;
 }
@@ -134,6 +136,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: decoded.email,
       name: decoded.email.split("@")[0],
       role: decoded.role,
+      // Not in the JWT payload itself, but this path is ONLY ever hit
+      // after a Google OAuth redirect — and Google-authenticated users
+      // are always auto-verified server-side (see AuthService.oauthLogin),
+      // so this is accurate here, not a guess.
+      emailVerified: true,
     };
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(reconstructed));
     setUser(reconstructed);
@@ -168,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signup,
         login,
         hydrateFromToken,
+        hydrateFromAuthResponse: persist,
         refreshAuth,
         logout,
       }}

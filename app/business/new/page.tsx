@@ -47,7 +47,7 @@ const RESERVATION_POLICY_OPTIONS = [
 const MAX_CATEGORIES_FALLBACK = 5;
 
 export default function NewBusinessPage() {
-  const { authed, businessId, openAuthModal, refreshAuth } = useAuth();
+  const { authed, user, businessId, openAuthModal, refreshAuth } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
 
@@ -201,6 +201,36 @@ export default function NewBusinessPage() {
       <>
         <Navbar />
         <div className="px-11 py-24 text-center text-warm-clay">Sign in to list your business.</div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (user && !user.emailVerified) {
+    return (
+      <>
+        <Navbar />
+        <div className="mx-auto max-w-md px-6 py-24 text-center">
+          <i className="bi bi-envelope-exclamation mb-3 block text-4xl text-terracotta" />
+          <h1 className="mb-2 text-2xl text-warm-brown">Verify your email first</h1>
+          <p className="mb-6 text-sm text-warm-clay">
+            We sent a verification link to <strong>{user.email}</strong> when you signed up. Confirm it before
+            listing a business — check your inbox (and spam folder).
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                await api.auth.resendVerification(user.email);
+                showToast("Verification email sent — check your inbox.");
+              } catch (err) {
+                showToast(err instanceof ApiError ? err.message : "Couldn't send that, try again.");
+              }
+            }}
+            className="rounded-full bg-terracotta px-6 py-2.5 text-sm font-semibold text-white"
+          >
+            Resend verification email
+          </button>
+        </div>
         <Footer />
       </>
     );
