@@ -676,59 +676,91 @@ function VideoSection({
       video.src = URL.createObjectURL(file);
     });
 
+  // Processes selected files ONE AT A TIME, each fully completing
+  // (including the server's cap re-check) before the next one's own
+  // upload-url request is even made. That sequencing is what actually
+  // makes this safe: the cap check re-counts from the database fresh
+  // on every call, so two files uploaded in PARALLEL could each see
+  // "1 slot left" before either one's record actually exists yet, and
+  // both get let through — a classic check-then-act race. Sequential
+  // means there's never more than one in-flight check-then-create
+  // cycle for this business at a time, so each file's check reflects
+  // the true, just-updated count (Val, Sep 2026: "will this be a
+  // problem?" — only if done in parallel, which this isn't).
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
-    try {
-      const durationSeconds = Math.round(await getDuration(file));
-      if (durationSeconds > maxSeconds) {
-        setError(`This video is ${durationSeconds}s, your ${tier} tier's limit is ${maxSeconds}s.`);
-        return;
-      }
-      const ext = file.name.split(".").pop() || "mp4";
-      const { publicUrl, storageKey, signedUpload } = await api.media.getUploadUrl(businessId, "VIDEO", ext);
+    let succeeded = 0;
+    let capHit = false;
+    let lastError: string | null = null;
 
-      if (signedUpload) {
-        // Straight to Cloudinary, never through this app's own API —
-        // that's what actually avoids Vercel's 4.5MB request body cap.
-        // The upload itself uses plain fetch rather than the api.ts
-        // request() helper, since this isn't a call to our API at all.
-        const cloudinaryForm = new FormData();
-        cloudinaryForm.append("file", file);
-        cloudinaryForm.append("api_key", signedUpload.apiKey);
-        cloudinaryForm.append("timestamp", String(signedUpload.timestamp));
-        cloudinaryForm.append("signature", signedUpload.signature);
-        cloudinaryForm.append("public_id", signedUpload.publicId);
-        const cloudinaryRes = await fetch(signedUpload.cloudinaryUploadUrl, { method: "POST", body: cloudinaryForm });
-        if (!cloudinaryRes.ok) {
-          throw new Error("Couldn't upload that video, try again.");
-        }
-        // Confirms with our API afterward — small JSON, no file bytes —
-        // so the (duration-only) quality gate can run and the DB row
-        // gets created. A rejection here deletes the file Cloudinary
-        // already has, rather than never having accepted it.
-        await api.media.confirmVideoUpload(businessId, { url: publicUrl, storageKey, durationSeconds });
-      } else {
-        // Cloudinary isn't configured (local dev default) — same
-        // multipart flow this always used, completely unchanged.
-        const formData = new FormData();
-        formData.append("file", file);
-        await api.media.submit(
-          businessId,
-          formData,
-          `type=VIDEO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}&durationSeconds=${durationSeconds}`,
-        );
+    for (const file of files) {
+      if (videos.length + succeeded >= limit) {
+        capHit = true;
+        break;
       }
-      showToast("Video published.");
-      onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Upload failed, try again.");
-    } finally {
-      setBusy(false);
-      e.target.value = "";
+      try {
+        const durationSeconds = Math.round(await getDuration(file));
+        if (durationSeconds > maxSeconds) {
+          lastError = `${file.name} is ${durationSeconds}s, your ${tier} tier's limit is ${maxSeconds}s.`;
+          continue;
+        }
+        const ext = file.name.split(".").pop() || "mp4";
+        const { publicUrl, storageKey, signedUpload } = await api.media.getUploadUrl(businessId, "VIDEO", ext);
+
+        if (signedUpload) {
+          // Straight to Cloudinary, never through this app's own API —
+          // that's what actually avoids Vercel's 4.5MB request body cap.
+          // The upload itself uses plain fetch rather than the api.ts
+          // request() helper, since this isn't a call to our API at all.
+          const cloudinaryForm = new FormData();
+          cloudinaryForm.append("file", file);
+          cloudinaryForm.append("api_key", signedUpload.apiKey);
+          cloudinaryForm.append("timestamp", String(signedUpload.timestamp));
+          cloudinaryForm.append("signature", signedUpload.signature);
+          cloudinaryForm.append("public_id", signedUpload.publicId);
+          const cloudinaryRes = await fetch(signedUpload.cloudinaryUploadUrl, { method: "POST", body: cloudinaryForm });
+          if (!cloudinaryRes.ok) {
+            throw new Error(`Couldn't upload ${file.name}, try again.`);
+          }
+          // Confirms with our API afterward — small JSON, no file bytes —
+          // so the (duration-only) quality gate can run and the DB row
+          // gets created. A rejection here deletes the file Cloudinary
+          // already has, rather than never having accepted it.
+          await api.media.confirmVideoUpload(businessId, { url: publicUrl, storageKey, durationSeconds });
+        } else {
+          // Cloudinary isn't configured (local dev default) — same
+          // multipart flow this always used, completely unchanged.
+          const formData = new FormData();
+          formData.append("file", file);
+          await api.media.submit(
+            businessId,
+            formData,
+            `type=VIDEO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}&durationSeconds=${durationSeconds}`,
+          );
+        }
+        succeeded++;
+      } catch (err) {
+        // One rejected video (too blurry, wrong format, whatever)
+        // doesn't stop the rest of the batch — only running out of
+        // cap room does.
+        lastError = err instanceof ApiError ? err.message : `Couldn't upload ${file.name}.`;
+      }
     }
+
+    if (succeeded > 0) {
+      showToast(files.length === 1 ? "Video published." : `${succeeded} of ${files.length} videos published.`);
+      onChanged();
+    }
+    if (capHit) {
+      setError(`Reached your ${tier} tier's limit of ${limit} videos — ${files.length - succeeded} skipped.`);
+    } else if (lastError) {
+      setError(lastError);
+    }
+    setBusy(false);
+    e.target.value = "";
   };
 
   return (
@@ -768,7 +800,7 @@ function VideoSection({
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-cream px-4 py-2.5 text-sm font-semibold">
         <i className="bi bi-camera-video" />
         {busy ? "Checking video…" : "Upload Video"}
-        <input type="file" accept="video/*" className="hidden" onChange={handleFile} disabled={busy || videos.length >= limit} />
+        <input type="file" accept="video/*" multiple className="hidden" onChange={handleFile} disabled={busy || videos.length >= limit} />
       </label>
       {error && <p className="mt-2 text-sm text-error">{error}</p>}
       {videos.length >= limit && (
@@ -822,28 +854,53 @@ function MediaSection({
     }
   };
 
+  // Same sequential-not-parallel reasoning as VideoSection's
+  // handleFile — see the comment there. Each photo fully completes
+  // (including the server re-checking the cap fresh from the database)
+  // before the next one's own request starts, which is what actually
+  // prevents a batch from slipping past the tier's photo limit.
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const { publicUrl, storageKey } = await api.media.getUploadUrl(businessId, "PHOTO", ext);
-      const formData = new FormData();
-      formData.append("file", file);
-      await api.media.submit(businessId, formData, `type=PHOTO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}`);
-      showToast("Photo published.");
-      onChanged();
-    } catch (err) {
-      // The quality gate's rejection reason (too small, too blurry, etc.)
-      // surfaces here in plain language, matches BRD's "Media Upload
-      // Rejected" empty-state spec.
-      setError(err instanceof ApiError ? err.message : "Upload failed, try again.");
-    } finally {
-      setBusy(false);
-      e.target.value = "";
+    let succeeded = 0;
+    let capHit = false;
+    let lastError: string | null = null;
+
+    for (const file of files) {
+      if (photos.length + succeeded >= limit) {
+        capHit = true;
+        break;
+      }
+      try {
+        const ext = file.name.split(".").pop() || "jpg";
+        const { publicUrl, storageKey } = await api.media.getUploadUrl(businessId, "PHOTO", ext);
+        const formData = new FormData();
+        formData.append("file", file);
+        await api.media.submit(businessId, formData, `type=PHOTO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}`);
+        succeeded++;
+      } catch (err) {
+        // The quality gate's rejection reason (too small, too blurry,
+        // etc.) surfaces here in plain language, matches BRD's "Media
+        // Upload Rejected" empty-state spec. One rejected photo doesn't
+        // stop the rest of the batch — only running out of cap room
+        // does.
+        lastError = err instanceof ApiError ? err.message : `Couldn't upload ${file.name}.`;
+      }
     }
+
+    if (succeeded > 0) {
+      showToast(files.length === 1 ? "Photo published." : `${succeeded} of ${files.length} photos published.`);
+      onChanged();
+    }
+    if (capHit) {
+      setError(`Reached your ${tier} tier's limit of ${limit} photos — ${files.length - succeeded} skipped.`);
+    } else if (lastError) {
+      setError(lastError);
+    }
+    setBusy(false);
+    e.target.value = "";
   };
 
   return (
@@ -932,7 +989,7 @@ function MediaSection({
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-cream px-4 py-2.5 text-sm font-semibold">
         <i className="bi bi-cloud-upload" />
         {busy ? "Checking photo…" : "Upload Photo"}
-        <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={busy || photos.length >= limit} />
+        <input type="file" accept="image/*" multiple className="hidden" onChange={handleFile} disabled={busy || photos.length >= limit} />
       </label>
       {error && <p className="mt-2 text-sm text-error">{error}</p>}
       {photos.length >= limit && <p className="mt-2 text-xs text-warm-clay">You&apos;ve used all {limit} photos on your {tier} tier. Upgrade for more.</p>}
@@ -1766,12 +1823,27 @@ function SupportContact() {
         Questions about your listing, subscription, or payments? Our support team is here for business
         accounts.
       </p>
-      <a
-        href="mailto:support@spotly.co.ke"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta hover:underline"
-      >
-        <i className="bi bi-envelope" /> support@spotly.co.ke
-      </a>
+      <div className="flex flex-wrap gap-4">
+        <a
+          href="mailto:hello@spotly.co.ke"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta hover:underline"
+        >
+          <i className="bi bi-envelope" /> hello@spotly.co.ke
+        </a>
+        {/* Number intentionally not shown as visible text (Val, Sep
+            2026) — wa.me handles opening the app or web depending on
+            the device on its own, same as the public business pages'
+            WhatsApp button; the number only needs to exist inside this
+            link, not be readable on the page. */}
+        <a
+          href="https://wa.me/254790473112"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-terracotta hover:underline"
+        >
+          <i className="bi bi-whatsapp" /> WhatsApp
+        </a>
+      </div>
     </div>
   );
 }
