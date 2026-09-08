@@ -12,6 +12,7 @@ import { api, ApiError, type Business, type Experience, type Media } from "@/lib
 import { geocodeAddress } from "@/lib/location";
 import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
+import { DashboardGallery } from "@/components/DashboardGallery";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
@@ -86,6 +87,7 @@ export default function DashboardPage() {
   useEffect(() => setMounted(true), []);
 
   const [business, setBusiness] = useState<Business | null>(null);
+  const [activeTab, setActiveTab] = useState<"profile" | "gallery">("profile");
   const [tiers, setTiers] = useState<Record<string, TierLimits> | null>(null);
   const [subStatus, setSubStatus] = useState<{
     shouldPromptUpgrade: boolean;
@@ -208,18 +210,49 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-[1fr_360px] gap-8 max-md:grid-cols-1">
           <div className="space-y-8">
-            <ProfileEditor business={business} onSaved={load} />
-            <MediaSection businessId={businessId} media={business.media || []} coverMediaId={business.coverMediaId ?? null} tier={business.tier} tiers={tiers} onChanged={load} />
-            <VideoSection businessId={businessId} media={business.media || []} tier={business.tier} tiers={tiers} onChanged={load} />
-            <ExperienceManager
-              businessId={businessId}
-              experiences={hostingHistory}
-              tier={business.tier}
-              tiers={tiers}
-              businessBudgetMin={business.budgetMin ?? null}
-              businessBudgetMax={business.budgetMax ?? null}
-              onChanged={load}
-            />
+            {/* Gallery split into its own tab (Val, Sep 2026: "so they
+                don't have to scroll to the bottom to see their media or
+                upload") — same Gallery/About-style tab pattern the
+                PUBLIC profile page already uses, so it's a familiar
+                shape for a returning owner. */}
+            <div className="flex gap-1.5 rounded-full border border-border bg-cream p-1.5">
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "profile" ? "bg-terracotta text-white" : "text-warm-clay"}`}
+              >
+                Profile
+              </button>
+              <button
+                onClick={() => setActiveTab("gallery")}
+                className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "gallery" ? "bg-terracotta text-white" : "text-warm-clay"}`}
+              >
+                Gallery
+              </button>
+            </div>
+
+            {activeTab === "gallery" ? (
+              <DashboardGallery
+                businessId={businessId}
+                media={business.media || []}
+                coverMediaId={business.coverMediaId ?? null}
+                tier={business.tier}
+                tiers={tiers}
+                onChanged={load}
+              />
+            ) : (
+              <>
+                <ProfileEditor business={business} onSaved={load} />
+                <ExperienceManager
+                  businessId={businessId}
+                  experiences={hostingHistory}
+                  tier={business.tier}
+                  tiers={tiers}
+                  businessBudgetMin={business.budgetMin ?? null}
+                  businessBudgetMax={business.budgetMax ?? null}
+                  onChanged={load}
+                />
+              </>
+            )}
           </div>
           <div className="space-y-8">
             <SubscriptionPanel business={business} tiers={tiers} subStatus={subStatus} onUpgraded={load} showToast={showToast} />
@@ -629,434 +662,6 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
       >
         {busy ? "Saving…" : "Save Changes"}
       </button>
-    </div>
-  );
-}
-
-// ---------- Media ----------
-
-function VideoSection({
-  businessId,
-  media,
-  tier,
-  tiers,
-  onChanged,
-}: {
-  businessId: string;
-  media: Media[];
-  tier: string;
-  tiers: Record<string, TierLimits> | null;
-  onChanged: () => void;
-}) {
-  const { showToast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const videos = media.filter((m) => m.type === "VIDEO" && m.status === "APPROVED");
-  const limit = tiers?.[tier]?.videos ?? 0;
-  const maxSeconds = tiers?.[tier]?.videoMaxSeconds ?? 60;
-
-  // The quality gate needs a real duration to enforce the tier's max —
-  // without this, checkVideo silently passes anything (0s never exceeds
-  // a positive max), so the length limit would exist in name only. A
-  // browser can read this itself by loading the file into a throwaway
-  // <video> element and waiting for its metadata, no upload needed yet.
-  const getDuration = (file: File): Promise<number> =>
-    new Promise((resolve, reject) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(video.src);
-        resolve(video.duration);
-      };
-      video.onerror = () => {
-        URL.revokeObjectURL(video.src);
-        reject(new Error("Couldn't read that video file."));
-      };
-      video.src = URL.createObjectURL(file);
-    });
-
-  // Processes selected files ONE AT A TIME, each fully completing
-  // (including the server's cap re-check) before the next one's own
-  // upload-url request is even made. That sequencing is what actually
-  // makes this safe: the cap check re-counts from the database fresh
-  // on every call, so two files uploaded in PARALLEL could each see
-  // "1 slot left" before either one's record actually exists yet, and
-  // both get let through — a classic check-then-act race. Sequential
-  // means there's never more than one in-flight check-then-create
-  // cycle for this business at a time, so each file's check reflects
-  // the true, just-updated count (Val, Sep 2026: "will this be a
-  // problem?" — only if done in parallel, which this isn't).
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    setBusy(true);
-    setError(null);
-    let succeeded = 0;
-    let capHit = false;
-    let lastError: string | null = null;
-
-    for (const file of files) {
-      if (videos.length + succeeded >= limit) {
-        capHit = true;
-        break;
-      }
-      try {
-        const durationSeconds = Math.round(await getDuration(file));
-        if (durationSeconds > maxSeconds) {
-          lastError = `${file.name} is ${durationSeconds}s, your ${tier} tier's limit is ${maxSeconds}s.`;
-          continue;
-        }
-        const ext = file.name.split(".").pop() || "mp4";
-        const { publicUrl, storageKey, signedUpload } = await api.media.getUploadUrl(businessId, "VIDEO", ext);
-
-        if (signedUpload) {
-          // Straight to Cloudinary, never through this app's own API —
-          // that's what actually avoids Vercel's 4.5MB request body cap.
-          // The upload itself uses plain fetch rather than the api.ts
-          // request() helper, since this isn't a call to our API at all.
-          const cloudinaryForm = new FormData();
-          cloudinaryForm.append("file", file);
-          cloudinaryForm.append("api_key", signedUpload.apiKey);
-          cloudinaryForm.append("timestamp", String(signedUpload.timestamp));
-          cloudinaryForm.append("signature", signedUpload.signature);
-          cloudinaryForm.append("public_id", signedUpload.publicId);
-          const cloudinaryRes = await fetch(signedUpload.cloudinaryUploadUrl, { method: "POST", body: cloudinaryForm });
-          if (!cloudinaryRes.ok) {
-            throw new Error(`Couldn't upload ${file.name}, try again.`);
-          }
-          // Confirms with our API afterward — small JSON, no file bytes —
-          // so the (duration-only) quality gate can run and the DB row
-          // gets created. A rejection here deletes the file Cloudinary
-          // already has, rather than never having accepted it.
-          await api.media.confirmVideoUpload(businessId, { url: publicUrl, storageKey, durationSeconds });
-        } else {
-          // Cloudinary isn't configured (local dev default) — same
-          // multipart flow this always used, completely unchanged.
-          const formData = new FormData();
-          formData.append("file", file);
-          await api.media.submit(
-            businessId,
-            formData,
-            `type=VIDEO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}&durationSeconds=${durationSeconds}`,
-          );
-        }
-        succeeded++;
-      } catch (err) {
-        // One rejected video (too blurry, wrong format, whatever)
-        // doesn't stop the rest of the batch — only running out of
-        // cap room does.
-        lastError = err instanceof ApiError ? err.message : `Couldn't upload ${file.name}.`;
-      }
-    }
-
-    if (succeeded > 0) {
-      showToast(files.length === 1 ? "Video published." : `${succeeded} of ${files.length} videos published.`);
-      onChanged();
-    }
-    if (capHit) {
-      setError(`Reached your ${tier} tier's limit of ${limit} videos — ${files.length - succeeded} skipped.`);
-    } else if (lastError) {
-      setError(lastError);
-    }
-    setBusy(false);
-    e.target.value = "";
-  };
-
-  return (
-    <div className="rounded-spotly border border-border bg-surface p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl text-warm-brown">Videos</h2>
-        <span className="text-xs font-semibold text-warm-clay">
-          {videos.length} of {limit} used · up to {maxSeconds}s each
-        </span>
-      </div>
-
-      {videos.length > 0 && (
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          {videos.map((m) => (
-            <div key={m.id} className="group relative">
-              <video src={m.url} controls className="h-28 w-full rounded-lg bg-black object-cover" />
-              <button
-                onClick={async () => {
-                  try {
-                    await api.media.remove(businessId, m.id);
-                    showToast("Video removed.");
-                    onChanged();
-                  } catch (err) {
-                    showToast(err instanceof ApiError ? err.message : "Couldn't remove that video.");
-                  }
-                }}
-                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(67,53,47,0.75)] text-xs text-white opacity-0 transition group-hover:opacity-100"
-                aria-label="Delete video"
-              >
-                <i className="bi bi-trash" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-cream px-4 py-2.5 text-sm font-semibold">
-        <i className="bi bi-camera-video" />
-        {busy ? "Checking video…" : "Upload Video"}
-        <input type="file" accept="video/*" multiple className="hidden" onChange={handleFile} disabled={busy || videos.length >= limit} />
-      </label>
-      {error && <p className="mt-2 text-sm text-error">{error}</p>}
-      {videos.length >= limit && (
-        <p className="mt-2 text-xs text-warm-clay">You&apos;ve used all {limit} videos on your {tier} tier. Upgrade for more.</p>
-      )}
-    </div>
-  );
-}
-
-function MediaSection({
-  businessId,
-  media,
-  coverMediaId,
-  tier,
-  tiers,
-  onChanged,
-}: {
-  businessId: string;
-  media: Media[];
-  coverMediaId: string | null;
-  tier: string;
-  tiers: Record<string, TierLimits> | null;
-  onChanged: () => void;
-}) {
-  const { showToast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const [coverBusyId, setCoverBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [flaggedLightboxSrc, setFlaggedLightboxSrc] = useState<string | null>(null);
-
-  const photos = media.filter((m) => m.type === "PHOTO" && m.status === "APPROVED");
-  const flaggedPhotos = media.filter((m) => m.type === "PHOTO" && m.status === "FLAGGED");
-  const limit = tiers?.[tier]?.photos ?? 0;
-  // No explicit choice made yet means the default cover is whichever
-  // photo is first in this array — the API already orders it that way
-  // (oldest-uploaded first, or the chosen cover if one's set — see
-  // BusinessService.attachRatingsAndStripMetrics).
-  const effectiveCoverId = coverMediaId ?? photos[0]?.id ?? null;
-
-  const handleSetCover = async (mediaId: string) => {
-    setCoverBusyId(mediaId);
-    try {
-      await api.businesses.setCoverPhoto(businessId, mediaId);
-      showToast("Cover photo updated.");
-      onChanged();
-    } catch (err) {
-      showToast(err instanceof ApiError ? err.message : "Couldn't set that as the cover photo.");
-    } finally {
-      setCoverBusyId(null);
-    }
-  };
-
-  // Same sequential-not-parallel reasoning as VideoSection's
-  // handleFile — see the comment there. Each photo fully completes
-  // (including the server re-checking the cap fresh from the database)
-  // before the next one's own request starts, which is what actually
-  // prevents a batch from slipping past the tier's photo limit.
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    setBusy(true);
-    setError(null);
-    let succeeded = 0;
-    let capHit = false;
-    let lastError: string | null = null;
-
-    for (const file of files) {
-      if (photos.length + succeeded >= limit) {
-        capHit = true;
-        break;
-      }
-      try {
-        const ext = file.name.split(".").pop() || "jpg";
-        const { publicUrl, storageKey } = await api.media.getUploadUrl(businessId, "PHOTO", ext);
-        const formData = new FormData();
-        formData.append("file", file);
-        await api.media.submit(businessId, formData, `type=PHOTO&url=${encodeURIComponent(publicUrl)}&storageKey=${encodeURIComponent(storageKey)}`);
-        succeeded++;
-      } catch (err) {
-        // The quality gate's rejection reason (too small, too blurry,
-        // etc.) surfaces here in plain language, matches BRD's "Media
-        // Upload Rejected" empty-state spec. One rejected photo doesn't
-        // stop the rest of the batch — only running out of cap room
-        // does.
-        lastError = err instanceof ApiError ? err.message : `Couldn't upload ${file.name}.`;
-      }
-    }
-
-    if (succeeded > 0) {
-      showToast(files.length === 1 ? "Photo published." : `${succeeded} of ${files.length} photos published.`);
-      onChanged();
-    }
-    if (capHit) {
-      setError(`Reached your ${tier} tier's limit of ${limit} photos — ${files.length - succeeded} skipped.`);
-    } else if (lastError) {
-      setError(lastError);
-    }
-    setBusy(false);
-    e.target.value = "";
-  };
-
-  return (
-    <div className="rounded-spotly border border-border bg-surface p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl text-warm-brown">Photos</h2>
-        <span className="text-xs font-semibold text-warm-clay">
-          {photos.length} of {limit} used
-        </span>
-      </div>
-
-      {photos.length > 0 && (
-        <div className="mb-4 grid grid-cols-4 gap-2">
-          {photos.map((m, i) => (
-            <div key={m.id} className="group relative">
-              <button
-                type="button"
-                onClick={() => setLightboxIndex(i)}
-                className="block w-full cursor-zoom-in"
-                aria-label="View full photo"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={m.url}
-                  alt=""
-                  className="h-20 w-full rounded-lg object-cover transition group-hover:brightness-90"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                    const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
-                    if (fallback) fallback.style.display = "flex";
-                  }}
-                />
-                <div className="hidden h-20 w-full flex-col items-center justify-center gap-1 rounded-lg bg-cream text-warm-clay">
-                  <i className="bi bi-image text-lg" />
-                  <span className="text-[0.6rem]">Unavailable</span>
-                </div>
-              </button>
-              {m.id === effectiveCoverId ? (
-                <span className="absolute left-1 top-1 flex items-center gap-1 rounded-full bg-terracotta px-1.5 py-0.5 text-[0.6rem] font-semibold text-white">
-                  <i className="bi bi-star-fill" /> Cover
-                </span>
-              ) : (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSetCover(m.id);
-                  }}
-                  disabled={coverBusyId === m.id}
-                  className="absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(67,53,47,0.75)] text-xs text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-100"
-                  aria-label="Set as cover photo"
-                  title="Set as cover photo"
-                >
-                  <i className={coverBusyId === m.id ? "bi bi-hourglass-split" : "bi bi-star"} />
-                </button>
-              )}
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await api.media.remove(businessId, m.id);
-                    showToast("Photo removed.");
-                    onChanged();
-                  } catch (err) {
-                    showToast(err instanceof ApiError ? err.message : "Couldn't remove that photo.");
-                  }
-                }}
-                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(67,53,47,0.75)] text-xs text-white opacity-0 transition group-hover:opacity-100"
-                aria-label="Delete photo"
-              >
-                <i className="bi bi-trash" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {lightboxIndex != null && (
-        <Lightbox
-          media={photos.map((m) => ({ url: m.url, type: "PHOTO" as const }))}
-          startIndex={lightboxIndex}
-          alt="Business photo"
-          onClose={() => setLightboxIndex(null)}
-        />
-      )}
-
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-cream px-4 py-2.5 text-sm font-semibold">
-        <i className="bi bi-cloud-upload" />
-        {busy ? "Checking photo…" : "Upload Photo"}
-        <input type="file" accept="image/*" multiple className="hidden" onChange={handleFile} disabled={busy || photos.length >= limit} />
-      </label>
-      {error && <p className="mt-2 text-sm text-error">{error}</p>}
-      {photos.length >= limit && <p className="mt-2 text-xs text-warm-clay">You&apos;ve used all {limit} photos on your {tier} tier. Upgrade for more.</p>}
-
-      {flaggedPhotos.length > 0 && (
-        <div className="mt-5 rounded-2xl border border-warning bg-[rgba(227,169,59,0.08)] p-4">
-          <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-warm-brown">
-            <i className="bi bi-flag" /> Flagged for review
-          </p>
-          <p className="mb-3 text-xs text-warm-clay">
-            These photos matched an image already used on a different business account, so they&apos;re
-            held back from your public listing while our team reviews them. If this looks wrong, for
-            example, you re-uploaded your own photo, you can safely delete it and try a different image.
-          </p>
-          <div className="grid grid-cols-4 gap-2">
-            {flaggedPhotos.map((m) => (
-              <div key={m.id} className="group relative">
-                <button
-                  type="button"
-                  onClick={() => setFlaggedLightboxSrc(m.url)}
-                  className="block w-full cursor-zoom-in"
-                  aria-label="View full photo"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={m.url}
-                    alt=""
-                    className="h-20 w-full rounded-lg object-cover opacity-70"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                      const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
-                      if (fallback) fallback.style.display = "flex";
-                    }}
-                  />
-                  <div className="hidden h-20 w-full flex-col items-center justify-center gap-1 rounded-lg bg-cream text-warm-clay opacity-70">
-                    <i className="bi bi-image text-lg" />
-                    <span className="text-[0.6rem]">Unavailable</span>
-                  </div>
-                </button>
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await api.media.remove(businessId, m.id);
-                      showToast("Flagged photo removed.");
-                      onChanged();
-                    } catch (err) {
-                      showToast(err instanceof ApiError ? err.message : "Couldn't remove that photo.");
-                    }
-                  }}
-                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(67,53,47,0.75)] text-xs text-white opacity-0 transition group-hover:opacity-100"
-                  aria-label="Delete flagged photo"
-                >
-                  <i className="bi bi-trash" />
-                </button>
-              </div>
-            ))}
-          </div>
-          {flaggedLightboxSrc && (
-            <Lightbox
-              media={[{ url: flaggedLightboxSrc, type: "PHOTO" }]}
-              alt="Flagged photo"
-              onClose={() => setFlaggedLightboxSrc(null)}
-            />
-          )}
-        </div>
-      )}
     </div>
   );
 }
