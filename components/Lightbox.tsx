@@ -131,9 +131,33 @@ export function Lightbox({
     };
   }, []);
 
+  // Registers this as a real "screen" in the browser's history so
+  // Android's back button/gesture closes the Lightbox instead of
+  // falling through to actual page navigation, which is what it did
+  // before this fix — the browser had no idea the Lightbox was "a
+  // screen" at all (Val, Sep 2026: "going back returns to the home
+  // page instead of closing the media"). Every close path (X button,
+  // tapping the backdrop, Escape) goes through handleClose below,
+  // which triggers this same popstate listener via history.back()
+  // rather than calling onClose directly — so there's exactly one path
+  // that actually closes the viewer regardless of how it was
+  // triggered, and the pushed history entry never lingers behind after
+  // a UI-triggered close.
+  useEffect(() => {
+    window.history.pushState({ lightbox: true }, "");
+    const onPopState = () => onClose();
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleClose = () => {
+    window.history.back();
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
       if (e.key === "ArrowRight") goTo(idx + 1);
       if (e.key === "ArrowLeft") goTo(idx - 1);
     };
@@ -386,12 +410,12 @@ export function Lightbox({
     <div
       ref={overlayRef}
       className="fixed inset-0 z-[400] flex touch-none items-center justify-center bg-[rgba(20,15,12,0.92)]"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && handleClose()}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       <button
-        onClick={onClose}
+        onClick={handleClose}
         className="absolute right-5 top-5 z-[2] flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-lg text-white transition hover:bg-white/25"
         aria-label="Close"
       >

@@ -244,7 +244,7 @@ export function DashboardGallery({
         // Denser than the public gallery on purpose (more columns, tighter
         // gap) — this is the owner's own compact management view, not the
         // discovery-focused public one.
-        <div className="columns-3 gap-1 sm:columns-4 md:columns-5">
+        <div className="columns-3 gap-1.5 sm:columns-4 md:columns-5">
           {items.map((m, i) => (
             <GalleryTile
               key={m.id}
@@ -307,19 +307,32 @@ function GalleryTile({
   onLongPress: () => void;
 }) {
   // A timer-based long-press: starts on press-down, fires onLongPress if
-  // still held after LONG_PRESS_MS, cancelled by an early release or by
-  // the pointer moving too far (so a scroll gesture starting on a tile
-  // doesn't get mistaken for a long-press). A short press/release before
-  // the timer fires is treated as a normal tap (onOpen). Handles both
-  // touch and mouse, since long-press-to-manage is a useful shortcut on
-  // desktop too, not just a touch affordance.
+  // still held after LONG_PRESS_MS, cancelled by an early release, the
+  // pointer moving too far, OR the page actually scrolling underneath
+  // it — that last one is the real fix (Val, Sep 2026: "a small
+  // unintentional touch opens the media"). Movement distance alone
+  // isn't reliable on tightly packed small tiles: a finger can travel
+  // very little sideways while still genuinely mid-scroll. Listening
+  // for an actual scroll event while the touch is down catches that
+  // case even when the finger barely moved, and cancels the tap-open
+  // too, not just the long-press — a scroll happening at all means this
+  // was never a deliberate tap on this tile.
+  const MOVE_CANCEL_PX = 16;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firedRef = useRef(false);
+  const cancelledRef = useRef(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
+
+  const onScroll = () => {
+    cancelledRef.current = true;
+    clear();
+  };
 
   const start = (x: number, y: number) => {
     firedRef.current = false;
+    cancelledRef.current = false;
     startPos.current = { x, y };
+    window.addEventListener("scroll", onScroll, { passive: true });
     timerRef.current = setTimeout(() => {
       firedRef.current = true;
       onLongPress();
@@ -331,11 +344,20 @@ function GalleryTile({
     timerRef.current = null;
   };
 
+  const end = () => {
+    clear();
+    window.removeEventListener("scroll", onScroll);
+    if (!firedRef.current && !cancelledRef.current) onOpen();
+  };
+
   const move = (x: number, y: number) => {
     if (!startPos.current) return;
     const dx = Math.abs(x - startPos.current.x);
     const dy = Math.abs(y - startPos.current.y);
-    if (dx > 10 || dy > 10) clear();
+    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
+      cancelledRef.current = true;
+      clear();
+    }
   };
 
   return (
@@ -343,19 +365,16 @@ function GalleryTile({
       type="button"
       onTouchStart={(e) => start(e.touches[0].clientX, e.touches[0].clientY)}
       onTouchMove={(e) => move(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchEnd={() => {
-        clear();
-        if (!firedRef.current) onOpen();
-      }}
+      onTouchEnd={end}
       onMouseDown={(e) => start(e.clientX, e.clientY)}
       onMouseMove={(e) => move(e.clientX, e.clientY)}
-      onMouseUp={() => {
+      onMouseUp={end}
+      onMouseLeave={() => {
         clear();
-        if (!firedRef.current) onOpen();
+        window.removeEventListener("scroll", onScroll);
       }}
-      onMouseLeave={clear}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative mb-1 block w-full break-inside-avoid overflow-hidden rounded-lg bg-cream"
+      className="relative mb-1.5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-cream"
     >
       {media.type === "VIDEO" ? (
         <>

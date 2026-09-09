@@ -87,7 +87,7 @@ export default function DashboardPage() {
   useEffect(() => setMounted(true), []);
 
   const [business, setBusiness] = useState<Business | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "gallery">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "gallery">("gallery");
   const [tiers, setTiers] = useState<Record<string, TierLimits> | null>(null);
   const [subStatus, setSubStatus] = useState<{
     shouldPromptUpgrade: boolean;
@@ -195,11 +195,46 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Usage counters */}
-        <div className="mb-8 grid grid-cols-3 gap-4 max-md:grid-cols-1">
+        {/* Usage counters — desktop keeps the original 3-card grid.
+            Mobile gets a denser, TikTok-profile-inspired treatment
+            instead (Val, Sep 2026): Views/Saves share one compact row
+            (just numbers + labels, not two full-width cards for what's
+            really two small figures), and the tier moves into its own
+            strip below with a direct action — Upgrade, or Start Free
+            Trial if one's available and unclaimed, or nothing at all
+            once already on Premium. That action scrolls down to the
+            existing subscription section rather than opening a second,
+            duplicate upgrade UI up here. */}
+        <div className="mb-8 grid grid-cols-3 gap-4 max-md:hidden">
           <StatCard label="Profile views (30d)" value={business.profileViews ?? 0} icon="bi-eye" />
           <StatCard label="Saves this month" value={business.savesCount ?? 0} icon="bi-heart" />
           <StatCard label="Current tier" value={tierLabel(business.tier)} icon="bi-award" />
+        </div>
+        <div className="mb-8 hidden max-md:block">
+          <div className="mb-3 flex divide-x divide-border rounded-spotly border border-border bg-surface py-3">
+            <div className="flex-1 text-center">
+              <div className="text-xl font-bold text-warm-brown">{business.profileViews ?? 0}</div>
+              <div className="text-xs font-semibold text-warm-clay">Views (30d)</div>
+            </div>
+            <div className="flex-1 text-center">
+              <div className="text-xl font-bold text-warm-brown">{business.savesCount ?? 0}</div>
+              <div className="text-xs font-semibold text-warm-clay">Saves this month</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-spotly border border-border bg-surface px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-warm-clay">Current tier</p>
+              <p className="text-base font-bold text-warm-brown">{tierLabel(business.tier)}</p>
+            </div>
+            {business.tier !== "PREMIUM" && (
+              <button
+                onClick={() => document.getElementById("subscription-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white"
+              >
+                {subStatus?.trialOffer && !subStatus.activeTrial ? "Start Free Trial" : "Upgrade"}
+              </button>
+            )}
+          </div>
         </div>
 
         {subStatus?.shouldPromptUpgrade && subStatus.upgradeMessage && (
@@ -217,16 +252,16 @@ export default function DashboardPage() {
                 shape for a returning owner. */}
             <div className="flex gap-1.5 rounded-full border border-border bg-cream p-1.5">
               <button
-                onClick={() => setActiveTab("profile")}
-                className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "profile" ? "bg-terracotta text-white" : "text-warm-clay"}`}
-              >
-                Profile
-              </button>
-              <button
                 onClick={() => setActiveTab("gallery")}
                 className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "gallery" ? "bg-terracotta text-white" : "text-warm-clay"}`}
               >
                 Gallery
+              </button>
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "profile" ? "bg-terracotta text-white" : "text-warm-clay"}`}
+              >
+                Profile
               </button>
             </div>
 
@@ -254,7 +289,7 @@ export default function DashboardPage() {
               </>
             )}
           </div>
-          <div className="space-y-8">
+          <div className="space-y-8" id="subscription-panel">
             <SubscriptionPanel business={business} tiers={tiers} subStatus={subStatus} onUpgraded={load} showToast={showToast} />
             <SupportContact />
             <DangerZone business={business} />
