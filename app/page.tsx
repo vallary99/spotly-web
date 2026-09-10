@@ -30,7 +30,7 @@ import { getCurrentPosition, distanceKm } from "@/lib/location";
 // provider needed for this specific filter, Val, Sep 2026). Businesses
 // with no coordinates set are excluded rather than guessed at; see
 // sortByNearby below. "Trending" was removed
-// from this row entirely, the "Trending This Week" rail below already
+// from this row entirely, the "Spot It" rail below already
 // covers that, a duplicate quick-filter pill for the same thing was
 // redundant. "Open Now" filters client-side over whatever the current
 // query already returned, using the same hours-based open/closed logic
@@ -391,9 +391,17 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {/* TRENDING */}
+          {/* SPOT IT — renamed from "Trending This Week" (Val, Sep
+              2026): it's sorted by profileViews using the same rolling
+              30-day window "Popular This Month" uses for saves, not an
+              actual 7-day window, so the old label was making a time
+              claim the data never backed up. "Spot It" ties into the
+              existing tagline ("Find It. Book It. Spotly.") instead of
+              claiming a time window at all — sidesteps needing this to
+              ever be literally weekly, and avoids colliding with the
+              still-deferred, separate "Discover" page from the BRD. */}
           <div className="px-11 pt-[38px] max-md:px-[18px]">
-            <SectionHeader title="Trending This Week" />
+            <SectionHeader title="Spot It" />
             {data && data.rails.trendingThisWeek.length > 0 ? (
               <div className="h-scroll flex gap-[18px] overflow-x-auto pb-3.5">
                 {data.rails.trendingThisWeek.map((b) => (
@@ -401,13 +409,19 @@ export default function HomePage() {
                 ))}
               </div>
             ) : (
-              <EmptyRail text={activeMeta.has("openNow") ? "Nothing matching this filter is open right now." : "Businesses will show up here as they join Spotly this week."} />
+              <EmptyRail text={activeMeta.has("openNow") ? "Nothing matching this filter is open right now." : "Businesses will show up here as they join Spotly."} />
             )}
           </div>
 
-          {/* POPULAR NEAR YOU */}
+          {/* POPULAR THIS MONTH — renamed from "Popular Near You" (Val,
+              Sep 2026): this rail sorts by savesCount, a genuine
+              rolling 30-day window — "This Month" is accurate here,
+              unlike "Near You," which this rail never actually filtered
+              by at all (the real distance-based filter is the
+              separate "Nearby" toggle above, using real device
+              location). */}
           <div className="px-11 pt-[38px] max-md:px-[18px]">
-            <SectionHeader title="Popular Near You" />
+            <SectionHeader title="Popular This Month" />
             {data && data.rails.popularNearYou.length > 0 ? (
               <div className="h-scroll flex gap-[18px] overflow-x-auto pb-3.5">
                 {data.rails.popularNearYou.map((b) => (

@@ -266,26 +266,81 @@ export function DashboardGallery({
         />
       )}
 
+      {/* Redesigned into something that actually feels considered
+          (Val, Sep 2026: the old version "looks like no thought was
+          put into" it) — a real preview of what you're acting on
+          (rather than a bare text menu with no context), circular
+          icon badges instead of inline glyphs, a drag handle since
+          this is a bottom sheet, a slide-up entrance instead of
+          popping in instantly, and Cancel pulled into its own
+          separated card below the main actions — the standard native
+          action-sheet convention (iOS Share Sheet, Google Photos'
+          own long-press menu), which also makes it unmistakably the
+          "safe, undoes nothing" option versus the two real actions
+          above it. */}
       {menuFor && (
-        <div className="fixed inset-0 z-[350] flex items-end justify-center bg-[rgba(20,15,12,0.5)] sm:items-center" onClick={() => !actionBusy && setMenuFor(null)}>
-          <div className="w-full max-w-xs overflow-hidden rounded-t-[24px] bg-surface sm:rounded-[20px]" onClick={(e) => e.stopPropagation()}>
-            {menuFor.type === "PHOTO" && menuFor.id !== coverMediaId && (
+        <div
+          className="sheet-backdrop-in fixed inset-0 z-[350] flex items-end justify-center bg-[rgba(20,15,12,0.55)] sm:items-center"
+          onClick={() => !actionBusy && setMenuFor(null)}
+        >
+          <div className="sheet-in w-full max-w-xs px-3 pb-3 sm:px-0 sm:pb-0" onClick={(e) => e.stopPropagation()}>
+            <div className="overflow-hidden rounded-[24px] bg-surface shadow-[0_-8px_30px_rgba(67,53,47,0.18)]">
+              {/* Drag handle — purely visual, signals "this is a sheet"
+                  even though the actual dismiss is tap-outside or Cancel. */}
+              <div className="flex justify-center pb-1 pt-2.5 sm:hidden">
+                <div className="h-1 w-9 rounded-full bg-border" />
+              </div>
+
+              {/* What you're actually acting on — a real thumbnail
+                  rather than trusting the label alone. */}
+              <div className="flex items-center gap-3 border-b border-border px-4 py-3.5">
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-cream">
+                  {menuFor.type === "VIDEO" ? (
+                    <>
+                      <video src={menuFor.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25">
+                        <i className="bi bi-play-fill text-xs text-white" />
+                      </span>
+                    </>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={menuFor.url} alt="" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-warm-brown">{menuFor.type === "VIDEO" ? "Video" : "Photo"}</p>
+                  {menuFor.id === coverMediaId && <p className="text-xs text-warm-clay">Current cover photo</p>}
+                </div>
+              </div>
+
+              {menuFor.type === "PHOTO" && menuFor.id !== coverMediaId && (
+                <button
+                  onClick={() => handleSetCover(menuFor)}
+                  disabled={actionBusy}
+                  className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-left transition active:bg-cream disabled:opacity-60"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(199,101,58,0.12)] text-terracotta">
+                    <i className="bi bi-star-fill text-sm" />
+                  </span>
+                  <span className="text-sm font-semibold text-text">Use as cover photo</span>
+                </button>
+              )}
               <button
-                onClick={() => handleSetCover(menuFor)}
+                onClick={() => handleDelete(menuFor)}
                 disabled={actionBusy}
-                className="flex w-full items-center gap-3 border-b border-border px-5 py-4 text-left text-sm font-semibold text-text disabled:opacity-60"
+                className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-cream disabled:opacity-60"
               >
-                <i className="bi bi-star text-terracotta" /> Use as cover photo
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(199,62,58,0.1)] text-error">
+                  <i className="bi bi-trash3-fill text-sm" />
+                </span>
+                <span className="text-sm font-semibold text-error">Delete</span>
               </button>
-            )}
+            </div>
+
             <button
-              onClick={() => handleDelete(menuFor)}
-              disabled={actionBusy}
-              className="flex w-full items-center gap-3 border-b border-border px-5 py-4 text-left text-sm font-semibold text-error disabled:opacity-60"
+              onClick={() => setMenuFor(null)}
+              className="mt-2 w-full rounded-[24px] bg-surface py-3.5 text-center text-sm font-semibold text-warm-brown shadow-[0_-8px_30px_rgba(67,53,47,0.18)] active:bg-cream"
             >
-              <i className="bi bi-trash3" /> Delete
-            </button>
-            <button onClick={() => setMenuFor(null)} className="w-full px-5 py-4 text-center text-sm font-semibold text-warm-clay">
               Cancel
             </button>
           </div>
