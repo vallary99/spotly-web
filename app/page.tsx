@@ -232,13 +232,13 @@ export default function HomePage() {
 
           <div className="flex flex-1 flex-col justify-end pt-6 text-white">
             <span className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-white/35 bg-white/16 px-3.5 py-1.5 text-xs backdrop-blur-sm">
-              <i className="bi bi-stars" /> Nairobi&apos;s first 200 businesses
+              <i className="bi bi-stars" /> Nairobi&apos;s first 100 businesses
             </span>
             <h1 className="mb-3.5 max-w-xl text-[2.9rem] font-semibold leading-[1.15] max-md:text-3xl">
-              Discover What&apos;s Happening Nearby
+              There&apos;s always something new to discover.
             </h1>
             <p className="mb-7 max-w-lg text-lg opacity-92 max-md:mb-5 max-md:text-base">
-              The best cafés, nights out, and hidden gems in Nairobi, found by the people who live here, not an algorithm guessing.
+              Find new spots, experiences and events happening around Nairobi.
             </p>
 
             {/* Nearby / Open Now / Hidden Gems — where "Explore Nearby"
