@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import { AppProviders } from "@/components/AppProviders";
 
@@ -124,6 +125,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full flex flex-col bg-cream text-text pb-16 md:pb-0">
         <AppProviders>{children}</AppProviders>
+        {/* Only loads if NEXT_PUBLIC_GA_ID is actually set — local dev
+            and any preview deploy without it configured just don't send
+            anything, rather than shipping a real measurement ID hardcoded
+            in the repo or accidentally reporting test traffic as if it
+            were real production usage. Uses @next/third-parties, Next's
+            own official package for this — it handles the gtag.js script's
+            loading strategy correctly on its own, no manual <script> tag
+            or useEffect needed. */}
+        {process.env.NEXT_PUBLIC_GA_ID && <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID} />}
       </body>
     </html>
   );
