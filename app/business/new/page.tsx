@@ -46,12 +46,29 @@ const RESERVATION_POLICY_OPTIONS = [
 
 const MAX_CATEGORIES_FALLBACK = 5;
 
+const MADE_IN_KENYA_CATEGORIES = [
+  { value: "FASHION", label: "Fashion", hint: "Clothing, shoes, bags and similar" },
+  { value: "BEAUTY", label: "Beauty", hint: "Skincare, haircare, cosmetics, fragrances" },
+  { value: "ART_CRAFTS", label: "Art & Crafts", hint: "Pottery, paintings, handmade and woven pieces, sculptures" },
+  { value: "JEWELLERY_ACCESSORIES", label: "Jewellery & Accessories", hint: "Jewellery, watches, hair accessories, sunglasses" },
+  { value: "GIFTS_LIFESTYLE", label: "Gifts & Lifestyle", hint: "Curated gift boxes, stationery, candles and more" },
+];
+
 export default function NewBusinessPage() {
   const { authed, user, businessId, openAuthModal, refreshAuth } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
 
-  const [type, setType] = useState<"VENUE" | "EXPERIENCE_HOST">("VENUE");
+  const [type, setType] = useState<"VENUE" | "EXPERIENCE_HOST" | "MADE_IN_KENYA">("VENUE");
+  // Gates the actual Made in Kenya form behind an explanation + explicit
+  // confirmation (Val, Sep 2026: "a clear description of what Made in
+  // Kenya means, if they confirm that they understand then they are
+  // given a different flow") — resets whenever they switch away from
+  // this type, so picking it again always re-shows the explanation
+  // rather than remembering a stale confirmation from earlier in the
+  // same visit.
+  const [mikUnderstood, setMikUnderstood] = useState(false);
+  const [madeInKenyaCategory, setMadeInKenyaCategory] = useState("");
   const [name, setName] = useState("");
   const [categories, setCategories] = useState<string[]>(FALLBACK_CATEGORIES);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -151,17 +168,28 @@ export default function NewBusinessPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (selectedCategories.length === 0) {
-      setError("Please select at least one category.");
-      return;
-    }
-    if (!description.trim()) {
-      setError("A short description helps people know what to expect, please add one.");
-      return;
-    }
-    if (budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
-      setError("Minimum budget must be less than or equal to maximum budget.");
-      return;
+    if (type === "MADE_IN_KENYA") {
+      if (!madeInKenyaCategory) {
+        setError("Please select a category.");
+        return;
+      }
+      if (!description.trim()) {
+        setError("A short description helps people know what you make, please add one.");
+        return;
+      }
+    } else {
+      if (selectedCategories.length === 0) {
+        setError("Please select at least one category.");
+        return;
+      }
+      if (!description.trim()) {
+        setError("A short description helps people know what to expect, please add one.");
+        return;
+      }
+      if (budgetMin && budgetMax && parseFloat(budgetMin) > parseFloat(budgetMax)) {
+        setError("Minimum budget must be less than or equal to maximum budget.");
+        return;
+      }
     }
 
     setBusy(true);
@@ -170,7 +198,13 @@ export default function NewBusinessPage() {
       await api.businesses.create({
         type,
         name,
-        categories: selectedCategories,
+        // Made in Kenya has no general categories multi-select — its
+        // one category lives in madeInKenyaCategory instead (Val, Sep
+        // 2026: one category per business, not several). categories
+        // still gets sent as an empty array rather than omitted, since
+        // the backend DTO expects the field to exist.
+        categories: type === "MADE_IN_KENYA" ? [] : selectedCategories,
+        madeInKenyaCategory: type === "MADE_IN_KENYA" ? madeInKenyaCategory : undefined,
         description: description.trim(),
         callPhone: callPhone || undefined,
         whatsappPhone: whatsappPhone || undefined,
@@ -182,13 +216,21 @@ export default function NewBusinessPage() {
         city,
         neighborhood,
         amenities,
-        reservationPolicy: reservationPolicy || undefined,
-        budgetMin: budgetMin ? parseFloat(budgetMin) : undefined,
-        budgetMax: budgetMax ? parseFloat(budgetMax) : undefined,
+        reservationPolicy: type === "MADE_IN_KENYA" ? undefined : (reservationPolicy || undefined),
+        budgetMin: type === "MADE_IN_KENYA" ? undefined : (budgetMin ? parseFloat(budgetMin) : undefined),
+        budgetMax: type === "MADE_IN_KENYA" ? undefined : (budgetMax ? parseFloat(budgetMax) : undefined),
       });
       await refreshAuth();
-      showToast(`${name} is live on Spotly!`);
-      router.push("/dashboard");
+      if (type === "MADE_IN_KENYA") {
+        // Not live yet — no "is live" toast, no dashboard redirect with
+        // upload prompts that don't apply until approved (Val, Sep
+        // 2026: approval happens before anything else can happen).
+        showToast("Application submitted — we'll email you once it's reviewed.");
+        router.push("/business/new/submitted");
+      } else {
+        showToast(`${name} is live on Spotly!`);
+        router.push("/dashboard");
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't register that business, try again.");
     } finally {
@@ -249,10 +291,10 @@ export default function NewBusinessPage() {
           {/* Business type */}
           <div>
             <span className="mb-2 block text-sm font-semibold text-warm-brown">Business type</span>
-            <div className="flex gap-3">
+            <div className="flex gap-3 max-md:flex-col">
               <button
                 type="button"
-                onClick={() => setType("VENUE")}
+                onClick={() => { setType("VENUE"); setMikUnderstood(false); }}
                 className={`flex-1 rounded-spotly border p-4 text-left transition ${
                   type === "VENUE" ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-surface"
                 }`}
@@ -262,7 +304,7 @@ export default function NewBusinessPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setType("EXPERIENCE_HOST")}
+                onClick={() => { setType("EXPERIENCE_HOST"); setMikUnderstood(false); }}
                 className={`flex-1 rounded-spotly border p-4 text-left transition ${
                   type === "EXPERIENCE_HOST" ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-surface"
                 }`}
@@ -270,9 +312,139 @@ export default function NewBusinessPage() {
                 <div className="mb-1 font-semibold">Experience Host</div>
                 <div className="text-xs text-warm-clay">Publish one-time or recurring events, no fixed venue.</div>
               </button>
+              <button
+                type="button"
+                onClick={() => { setType("MADE_IN_KENYA"); setMikUnderstood(false); }}
+                className={`flex-1 rounded-spotly border p-4 text-left transition ${
+                  type === "MADE_IN_KENYA" ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-surface"
+                }`}
+              >
+                <div className="mb-1 font-semibold">Made in Kenya</div>
+                <div className="text-xs text-warm-clay">Sell a catalogue of Kenyan-made products, reviewed before going live.</div>
+              </button>
             </div>
           </div>
 
+          {/* The explanation + confirmation gate — nothing else in the
+              form renders until this is checked (Val, Sep 2026). */}
+          {type === "MADE_IN_KENYA" && !mikUnderstood && (
+            <div className="rounded-spotly border border-terracotta bg-[rgba(199,101,58,0.06)] p-5">
+              <h3 className="mb-2 font-semibold text-warm-brown">What "Made in Kenya" means on Spotly</h3>
+              <p className="mb-4 text-sm text-text">
+                Made in Kenya 🇰🇪 — products designed, produced, crafted or manufactured in Kenya. This isn't a
+                category any business can self-select just because it's Kenyan-based — every application is
+                reviewed before it goes live, and only genuine makers get approved. Once approved, you'll be able
+                to add photos and start posting your product catalogue.
+              </p>
+              <label className="mb-4 flex items-start gap-2.5 text-sm">
+                <input type="checkbox" checked={mikUnderstood} onChange={(e) => setMikUnderstood(e.target.checked)} className="mt-0.5" />
+                <span>I understand, and my products are genuinely made, designed, crafted or manufactured in Kenya.</span>
+              </label>
+            </div>
+          )}
+
+          {(type !== "MADE_IN_KENYA" || mikUnderstood) && (
+          <>
+          {type === "MADE_IN_KENYA" ? (
+            <>
+              <Field label="Business name">
+                <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Your brand name" />
+              </Field>
+
+              <Field label="Description">
+                <textarea
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  className={inputClass}
+                  placeholder="What do you make, and what makes it special?"
+                />
+              </Field>
+
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-warm-brown">Category</span>
+                <div className="space-y-2">
+                  {MADE_IN_KENYA_CATEGORIES.map((c) => (
+                    <button
+                      type="button"
+                      key={c.value}
+                      onClick={() => setMadeInKenyaCategory(c.value)}
+                      className={`w-full rounded-spotly border p-3.5 text-left transition ${
+                        madeInKenyaCategory === c.value ? "border-terracotta bg-[rgba(199,101,58,0.06)]" : "border-border bg-surface"
+                      }`}
+                    >
+                      <div className="font-semibold">{c.label}</div>
+                      <div className="text-xs text-warm-clay">{c.hint}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="City">
+                  <Select value={city} onChange={setCity} options={CITIES.map((c) => ({ value: c, label: c }))} />
+                </Field>
+                <Field label="Neighborhood / Area">
+                  <Select
+                    value={neighborhood}
+                    onChange={setNeighborhood}
+                    options={(LOCATIONS_BY_CITY[city] || []).map((n) => ({ value: n, label: n }))}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Address">
+                <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} placeholder="Street, building, area" />
+              </Field>
+
+              <Field label="Location on map">
+                {latitude != null ? (
+                  <div className="flex items-center justify-between rounded-full border border-border bg-cream px-4 py-2.5">
+                    <span className="flex items-center gap-2 text-sm text-text">
+                      <i className="bi bi-geo-alt-fill text-terracotta" /> Location set
+                    </span>
+                    <button type="button" onClick={() => setMapOpen(true)} className="text-sm font-semibold text-terracotta hover:underline">
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleShowMap}
+                    disabled={geocoding}
+                    className="flex items-center gap-2 rounded-full border border-terracotta bg-[rgba(199,101,58,0.08)] px-5 py-2.5 text-sm font-semibold text-terracotta transition hover:bg-[rgba(199,101,58,0.14)] disabled:opacity-60"
+                  >
+                    <i className={`bi ${geocoding ? "bi-arrow-repeat" : "bi-map"}`} />
+                    {geocoding ? "Looking up that address…" : "Show on map"}
+                  </button>
+                )}
+              </Field>
+
+              <Field label="Website (optional)">
+                <input value={website} onChange={(e) => setWebsite(e.target.value)} className={inputClass} placeholder="mybrand.co.ke" />
+              </Field>
+
+              <div>
+                <span className="mb-2 block text-sm font-semibold text-warm-brown">Amenities</span>
+                <div className="flex flex-wrap gap-2">
+                  {AMENITY_OPTIONS.map((a) => (
+                    <button
+                      type="button"
+                      key={a}
+                      onClick={() => toggleAmenity(a)}
+                      className={`rounded-full border px-3.5 py-1.5 text-sm transition ${
+                        amenities.includes(a) ? "border-terracotta bg-terracotta text-white" : "border-border bg-surface text-text"
+                      }`}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+          <>
           <Field label="Business name">
             <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Jiko Kilimani" />
           </Field>
@@ -441,7 +613,13 @@ export default function NewBusinessPage() {
               ))}
             </div>
           </div>
+          </>
+          )}
+          </>
+          )}
 
+          {(type !== "MADE_IN_KENYA" || mikUnderstood) && (
+          <>
           {error && <p className="text-sm text-error">{error}</p>}
 
           <button
@@ -449,8 +627,12 @@ export default function NewBusinessPage() {
             disabled={busy}
             className="w-full rounded-full bg-terracotta py-3.5 text-sm font-semibold text-white transition hover:bg-[#b5572f] disabled:opacity-60"
           >
-            {busy ? "Setting up your business…" : "List My Business"}
+            {busy
+              ? (type === "MADE_IN_KENYA" ? "Submitting…" : "Setting up your business…")
+              : (type === "MADE_IN_KENYA" ? "Request Approval" : "List My Business")}
           </button>
+          </>
+          )}
         </form>
       </div>
       <Footer />

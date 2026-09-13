@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,6 +18,7 @@ import { amenityIcon } from "@/lib/amenityIcons";
 import { computeOpenStatus, DAYS } from "@/lib/hours";
 import { useBookmarks } from "@/components/BookmarksContext";
 import { MasonryGallery } from "@/components/MasonryGallery";
+import { CatalogueSection } from "@/components/CatalogueSection";
 import { BusinessDetailSkeleton } from "@/components/Skeleton";
 
 // The actual interactive page — moved out of page.tsx (which now just
@@ -41,8 +43,16 @@ export default function BusinessDetailClient({ id }: { id: string }) {
   // Tabs split "Photos" from "About" so the info (contact, hours,
   // reviews) is reachable immediately rather than buried under a
   // gallery scroll — every tier gets this now, not just paid ones (see
-  // the layout branch below for why that changed).
-  const [activeTab, setActiveTab] = useState<"photos" | "about">("photos");
+  // the layout branch below for why that changed). "catalogue" only
+  // ever applies to Made in Kenya businesses.
+  const [activeTab, setActiveTab] = useState<"photos" | "about" | "catalogue">("photos");
+  // ?product= — a shared product link lands here rather than a
+  // dedicated product page (Val, Sep 2026: "Is there a way to share a
+  // product without having a dedicated page for it?"). Read once on
+  // load; CatalogueSection is what actually opens the right product
+  // once its own product list has loaded.
+  const searchParams = useSearchParams();
+  const deepLinkedProductId = searchParams.get("product");
 
   const loadReviews = () => api.reviews.forBusiness(id).then(setReviews);
 
@@ -52,6 +62,9 @@ export default function BusinessDetailClient({ id }: { id: string }) {
       .businesses.get(id)
       .then((b) => {
         setBusiness(b);
+        if (deepLinkedProductId && b.type === "MADE_IN_KENYA") {
+          setActiveTab("catalogue");
+        }
         return api.businesses.list({ category: b.categories?.[0] });
       })
       .then((list) => setRelated(list.filter((b) => b.id !== id).slice(0, 6)))
@@ -132,6 +145,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
 
   const handleShare = async () => {
     const url = window.location.href;
+    api.businesses.recordShare(business.id);
     if (navigator.share) {
       navigator.share({ title: business.name, url }).catch(() => {});
     } else {
@@ -563,8 +577,25 @@ export default function BusinessDetailClient({ id }: { id: string }) {
               >
                 <i className="bi bi-info-circle mr-1.5" /> About
               </button>
+              {business.type === "MADE_IN_KENYA" && (
+                <button
+                  onClick={() => setActiveTab("catalogue")}
+                  className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                    activeTab === "catalogue" ? "border-terracotta text-terracotta" : "border-transparent text-warm-clay hover:text-text"
+                  }`}
+                >
+                  <i className="bi bi-bag mr-1.5" /> Catalogue
+                </button>
+              )}
             </div>
-            <div className="pt-6">{activeTab === "photos" ? galleryBlock : aboutContentBlock}</div>
+            <div className="px-11 pt-6 max-md:px-4">
+              {activeTab === "catalogue" && (
+                <CatalogueSection businessId={business.id} autoOpenProductId={deepLinkedProductId} />
+              )}
+            </div>
+            {activeTab !== "catalogue" && (
+              <div className="pt-6">{activeTab === "photos" ? galleryBlock : aboutContentBlock}</div>
+            )}
           </>
         );
       })()}

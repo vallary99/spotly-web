@@ -446,6 +446,20 @@ export default function HomePage() {
               <EmptyRail text="No experiences hosted yet, check back soon." />
             )}
           </div>
+
+          {/* MADE IN KENYA — one simple combined rail across all five
+              categories for this first version, not a category-by-
+              category browser (Val, Sep 2026). */}
+          {data && data.rails.madeInKenya.length > 0 && (
+            <div className="px-11 pt-[38px] max-md:px-[18px]">
+              <SectionHeader title="Made in Kenya 🇰🇪" />
+              <div className="h-scroll flex gap-[18px] overflow-x-auto pb-3.5">
+                {data.rails.madeInKenya.map((b) => (
+                  <BusinessCard key={b.id} business={b} />
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

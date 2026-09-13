@@ -13,6 +13,7 @@ import { geocodeAddress } from "@/lib/location";
 import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
 import { DashboardGallery } from "@/components/DashboardGallery";
+import { DashboardProducts } from "@/components/DashboardProducts";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
@@ -87,7 +88,7 @@ export default function DashboardPage() {
   useEffect(() => setMounted(true), []);
 
   const [business, setBusiness] = useState<Business | null>(null);
-  const [activeTab, setActiveTab] = useState<"profile" | "gallery">("gallery");
+  const [activeTab, setActiveTab] = useState<"profile" | "gallery" | "products">("gallery");
   const [tiers, setTiers] = useState<Record<string, TierLimits> | null>(null);
   const [subStatus, setSubStatus] = useState<{
     shouldPromptUpgrade: boolean;
@@ -195,31 +196,29 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Usage counters — desktop keeps the original 3-card grid.
-            Mobile gets a denser, TikTok-profile-inspired treatment
-            instead (Val, Sep 2026): Views/Saves share one compact row
-            (just numbers + labels, not two full-width cards for what's
-            really two small figures), and the tier moves into its own
-            strip below with a direct action — Upgrade, or Start Free
-            Trial if one's available and unclaimed, or nothing at all
-            once already on Premium. That action scrolls down to the
-            existing subscription section rather than opening a second,
-            duplicate upgrade UI up here. */}
-        <div className="mb-8 grid grid-cols-3 gap-4 max-md:hidden">
-          <StatCard label="Profile views (30d)" value={business.profileViews ?? 0} icon="bi-eye" />
-          <StatCard label="Saves this month" value={business.savesCount ?? 0} icon="bi-heart" />
+        {/* Usage counters — now lifetime totals rather than a rolling
+            30-day window (Val, Sep 2026: "let's have them as total
+            until we introduce an analytics page" — the underlying
+            event log is untouched, so a real time-windowed view can
+            still be built from it later). Shares joins Views/Saves as
+            a third tracked stat, four cards total on desktop.
+            Mobile gets its own genuinely reworked treatment below,
+            not just a scaled-down version of the desktop cards — Val
+            didn't like how the compact row read visually, so this
+            gives each stat its own small card with a colored icon
+            badge (terracotta/gold/olive, the brand's own trio) instead
+            of a single divided strip of bare numbers. */}
+        <div className="mb-8 grid grid-cols-4 gap-4 max-md:hidden">
+          <StatCard label="Profile views" value={business.profileViews ?? 0} icon="bi-eye" />
+          <StatCard label="Saves" value={business.savesCount ?? 0} icon="bi-heart" />
+          <StatCard label="Shares" value={business.sharesCount ?? 0} icon="bi-share" />
           <StatCard label="Current tier" value={tierLabel(business.tier)} icon="bi-award" />
         </div>
         <div className="mb-8 hidden max-md:block">
-          <div className="mb-3 flex divide-x divide-border rounded-spotly border border-border bg-surface py-3">
-            <div className="flex-1 text-center">
-              <div className="text-xl font-bold text-warm-brown">{business.profileViews ?? 0}</div>
-              <div className="text-xs font-semibold text-warm-clay">Views (30d)</div>
-            </div>
-            <div className="flex-1 text-center">
-              <div className="text-xl font-bold text-warm-brown">{business.savesCount ?? 0}</div>
-              <div className="text-xs font-semibold text-warm-clay">Saves this month</div>
-            </div>
+          <div className="mb-3 grid grid-cols-3 gap-2.5">
+            <MobileStatCard icon="bi-eye-fill" value={business.profileViews ?? 0} label="Views" color="terracotta" />
+            <MobileStatCard icon="bi-heart-fill" value={business.savesCount ?? 0} label="Saves" color="gold" />
+            <MobileStatCard icon="bi-share-fill" value={business.sharesCount ?? 0} label="Shares" color="olive" />
           </div>
           <div className="flex items-center justify-between rounded-spotly border border-border bg-surface px-4 py-3">
             <div>
@@ -257,6 +256,14 @@ export default function DashboardPage() {
               >
                 Gallery
               </button>
+              {business.type === "MADE_IN_KENYA" && (
+                <button
+                  onClick={() => setActiveTab("products")}
+                  className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "products" ? "bg-terracotta text-white" : "text-warm-clay"}`}
+                >
+                  Catalogue
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab("profile")}
                 className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${activeTab === "profile" ? "bg-terracotta text-white" : "text-warm-clay"}`}
@@ -265,7 +272,7 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {activeTab === "gallery" ? (
+            {activeTab === "gallery" && (
               <DashboardGallery
                 businessId={businessId}
                 media={business.media || []}
@@ -274,18 +281,24 @@ export default function DashboardPage() {
                 tiers={tiers}
                 onChanged={load}
               />
-            ) : (
+            )}
+            {activeTab === "products" && business.type === "MADE_IN_KENYA" && (
+              <DashboardProducts businessId={businessId} approvalStatus={business.approvalStatus ?? "APPROVED"} showToast={showToast} />
+            )}
+            {activeTab === "profile" && (
               <>
                 <ProfileEditor business={business} onSaved={load} />
-                <ExperienceManager
-                  businessId={businessId}
-                  experiences={hostingHistory}
-                  tier={business.tier}
-                  tiers={tiers}
-                  businessBudgetMin={business.budgetMin ?? null}
-                  businessBudgetMax={business.budgetMax ?? null}
-                  onChanged={load}
-                />
+                {business.type !== "MADE_IN_KENYA" && (
+                  <ExperienceManager
+                    businessId={businessId}
+                    experiences={hostingHistory}
+                    tier={business.tier}
+                    tiers={tiers}
+                    businessBudgetMin={business.budgetMin ?? null}
+                    businessBudgetMax={business.budgetMax ?? null}
+                    onChanged={load}
+                  />
+                )}
               </>
             )}
           </div>
@@ -360,6 +373,38 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
       </div>
       <div className="text-2xl font-bold text-warm-brown">{value}</div>
+    </div>
+  );
+}
+
+// Mobile's own stat treatment, not a shrunken StatCard (Val, Sep 2026:
+// "I still don't like the cards in the mobile though"). A colored
+// circular icon badge per stat — using the brand's own terracotta/
+// gold/olive trio, not invented colors — gives each number a visual
+// identity instead of three identical bare figures in a divided strip.
+function MobileStatCard({
+  icon,
+  value,
+  label,
+  color,
+}: {
+  icon: string;
+  value: string | number;
+  label: string;
+  color: "terracotta" | "gold" | "olive";
+}) {
+  const badgeClass = {
+    terracotta: "bg-[rgba(199,101,58,0.12)] text-terracotta",
+    gold: "bg-[rgba(232,167,74,0.16)] text-gold",
+    olive: "bg-[rgba(93,96,65,0.12)] text-olive",
+  }[color];
+  return (
+    <div className="rounded-2xl border border-border bg-surface px-2 py-3.5 text-center">
+      <div className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full ${badgeClass}`}>
+        <i className={`bi ${icon} text-sm`} />
+      </div>
+      <div className="text-lg font-bold leading-none text-warm-brown">{value}</div>
+      <div className="mt-1 text-[0.68rem] font-semibold text-warm-clay">{label}</div>
     </div>
   );
 }

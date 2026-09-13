@@ -12,8 +12,52 @@ import BusinessDetailClient from "./BusinessDetailClient";
 // previews" possible at all here (Val, Sep 2026: search results/shares
 // were all showing the same generic Spotly title regardless of which
 // business the link was actually for).
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ product?: string }>;
+}): Promise<Metadata> {
   const { id } = await params;
+  const { product: productId } = await searchParams;
+
+  // A shared product link (?product=) — no dedicated product page
+  // exists (Val, Sep 2026: "Is there a way to share a product without
+  // having a dedicated page for it?"), so the share preview for THIS
+  // specific link uses the product's own photo/name/price instead of
+  // the business's generic info, even though the underlying page is
+  // the same one either way.
+  if (productId) {
+    try {
+      const product = await api.products.getOne(productId);
+      const description = product.description?.slice(0, 155) || `${product.name} — ${product.currency} ${product.price} on Spotly.`;
+      const photo = product.images[0]?.url;
+      return {
+        title: product.name,
+        description,
+        alternates: { canonical: `/businesses/${id}?product=${productId}` },
+        openGraph: {
+          title: product.name,
+          description,
+          url: `/businesses/${id}?product=${productId}`,
+          type: "website",
+          images: photo ? [{ url: photo }] : undefined,
+        },
+        twitter: {
+          card: "summary_large_image",
+          title: product.name,
+          description,
+          images: photo ? [photo] : undefined,
+        },
+      };
+    } catch {
+      // Falls through to the ordinary business metadata below — a
+      // dead/removed product link shouldn't break the page's metadata
+      // entirely, just fall back to describing the business itself.
+    }
+  }
+
   try {
     const business = await api.businesses.get(id);
     const photo = resolveBusinessPhotoUrl(business.media);

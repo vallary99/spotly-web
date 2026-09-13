@@ -103,7 +103,9 @@ export interface TierLimit {
 export interface Business {
   id: string;
   ownerId: string;
-  type: "VENUE" | "EXPERIENCE_HOST";
+  type: "VENUE" | "EXPERIENCE_HOST" | "MADE_IN_KENYA";
+  approvalStatus?: "APPROVED" | "PENDING" | "REJECTED";
+  madeInKenyaCategory?: "FASHION" | "BEAUTY" | "ART_CRAFTS" | "JEWELLERY_ACCESSORIES" | "GIFTS_LIFESTYLE" | null;
   name: string;
   // Replaced by `categories` (up to 5) — kept nowhere else, every
   // consumer reads the array now.
@@ -149,6 +151,7 @@ export interface Business {
   // Never render these on public cards/pages.
   profileViews?: number;
   savesCount?: number;
+  sharesCount?: number;
   // Attached server-side on every list/detail response.
   averageRating?: number;
   reviewCount?: number;
@@ -164,6 +167,27 @@ export interface Media {
   type: "PHOTO" | "VIDEO";
   url: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+}
+
+export interface ProductImage {
+  id: string;
+  productId: string;
+  url: string;
+  sortOrder: number;
+}
+
+export interface Product {
+  id: string;
+  businessId: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  images: ProductImage[];
+  createdAt: string;
+  // Only present on the home rail's version of a product, not the
+  // owner-facing GET /businesses/:id/products list.
+  businessName?: string;
 }
 
 export interface Experience {
@@ -212,6 +236,7 @@ export interface HomeResponse {
     trendingThisWeek: Business[];
     popularNearYou: Business[];
     upcomingExperiences: Experience[];
+    madeInKenya: Business[];
   };
 }
 
@@ -275,6 +300,10 @@ export const api = {
     // token here unconditionally meant the owner's own dashboard always
     // got the guest-level (approved-only) view of their own business.
     get: (id: string) => request<Business>(`/businesses/${id}`),
+    // Fire-and-forget from the caller's side too — a failed share-count
+    // ping shouldn't ever block or error out the actual share action
+    // itself (Val, Sep 2026: "add shares on that row").
+    recordShare: (id: string) => request(`/businesses/${id}/share`, { method: "POST", auth: false }).catch(() => {}),
     hostingHistory: (id: string) => request<Experience[]>(`/businesses/${id}/experiences/history`, { auth: false }),
     create: (dto: Record<string, unknown>) =>
       request<Business>("/businesses", { method: "POST", body: JSON.stringify(dto) }),
@@ -389,5 +418,27 @@ export const api = {
       request<Media>(`/businesses/${businessId}/media/confirm-video`, { method: "POST", body: JSON.stringify(dto) }),
     remove: (businessId: string, mediaId: string) =>
       request(`/businesses/${businessId}/media/${mediaId}`, { method: "DELETE" }),
+  },
+  products: {
+    // Public — no businessId scoping needed, this is the shareable
+    // single-product page's data source (Val, Sep 2026: "should also
+    // be shareable").
+    getOne: (id: string) => request<Product>(`/products/${id}`, { auth: false }),
+    listForBusiness: (businessId: string) => request<Product[]>(`/businesses/${businessId}/products`),
+    create: (businessId: string, dto: { name: string; description?: string; price: number }) =>
+      request<Product>(`/businesses/${businessId}/products`, { method: "POST", body: JSON.stringify(dto) }),
+    update: (businessId: string, productId: string, dto: { name?: string; description?: string; price?: number }) =>
+      request<Product>(`/businesses/${businessId}/products/${productId}`, { method: "PUT", body: JSON.stringify(dto) }),
+    remove: (businessId: string, productId: string) =>
+      request(`/businesses/${businessId}/products/${productId}`, { method: "DELETE" }),
+    getImageUploadUrl: (businessId: string, productId: string, ext: string) =>
+      request<{ uploadUrl: string; publicUrl: string; storageKey: string; simulated?: boolean }>(
+        `/businesses/${businessId}/products/${productId}/images/upload-url?ext=${ext}`,
+        { method: "POST" },
+      ),
+    addImage: (businessId: string, productId: string, formData: FormData, query: string) =>
+      request<ProductImage>(`/businesses/${businessId}/products/${productId}/images?${query}`, { method: "POST", body: formData }),
+    removeImage: (businessId: string, productId: string, imageId: string) =>
+      request(`/businesses/${businessId}/products/${productId}/images/${imageId}`, { method: "DELETE" }),
   },
 };
