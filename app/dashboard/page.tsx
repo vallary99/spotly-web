@@ -179,8 +179,7 @@ export default function DashboardPage() {
     <>
       <Navbar />
       <div className="px-11 pt-8 pb-16 max-md:px-4">
-        <EditableHeading business={business} onSaved={load} />
-        <p className="mb-8 text-sm text-warm-clay">Your Business Owner Surface, everything you need on one screen.</p>
+        <div className="mb-6"><EditableHeading business={business} onSaved={load} /></div>
 
         {!hasApprovedPhoto(business) && (
           <div className="mb-8 flex items-start gap-3 rounded-spotly border border-terracotta bg-[rgba(199,101,58,0.08)] p-5">
@@ -214,23 +213,59 @@ export default function DashboardPage() {
           <StatCard label="Shares" value={business.sharesCount ?? 0} icon="bi-share" />
           <StatCard label="Current tier" value={tierLabel(business.tier)} icon="bi-award" />
         </div>
-        <div className="mb-8 hidden max-md:block">
-          <div className="mb-3 grid grid-cols-3 gap-2.5">
-            <MobileStatCard icon="bi-eye-fill" value={business.profileViews ?? 0} label="Views" color="terracotta" />
-            <MobileStatCard icon="bi-heart-fill" value={business.savesCount ?? 0} label="Saves" color="gold" />
-            <MobileStatCard icon="bi-share-fill" value={business.sharesCount ?? 0} label="Shares" color="olive" />
-          </div>
-          <div className="flex items-center justify-between rounded-spotly border border-border bg-surface px-4 py-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-warm-clay">Current tier</p>
-              <p className="text-base font-bold text-warm-brown">{tierLabel(business.tier)}</p>
+        {/* Mobile: replaced the per-stat card treatment entirely (Val,
+            Sep 2026: "the cards are not needed in mobile screen, you
+            can just use dividers instead") — one compact row with
+            internal divider lines instead of three separate bordered
+            boxes, and icons only (no text labels) for views/saves/
+            shares, since a view/heart/share glyph already reads
+            clearly on its own without a label competing for space
+            (Val: "either only use words or symbols... make sure it is
+            good UI"). Tier drops the card treatment completely too —
+            a single plain text line, not a boxed component, exactly as
+            asked ("just show Tier: Free upgrade or discount or free
+            trial"). */}
+        {/* Redesigned as ONE unified card rather than two floating,
+            unconnected pieces (Val, Sep 2026, from an actual screenshot:
+            "This is bad UI/UX") — the stats row's own 20px radius
+            (rounded-spotly) looked like a full pill on something this
+            short, since the radius was nearly half its height; the tier
+            line had so much empty space between "Tier: Free" and the
+            action that they read as two disconnected floating texts,
+            not one intentional row. Wrapping both in a single card
+            (matching the Gallery card's own visual weight right below
+            it) fixes both — the outer radius now reads normally at this
+            taller combined height, and the tier row sits visually
+            grouped with the stats above it instead of floating loose. */}
+        <div className="mb-6 hidden max-md:block rounded-spotly border border-border bg-surface p-4">
+          <div className="mb-3 flex divide-x divide-border">
+            <div className="flex flex-1 items-center justify-center gap-1.5">
+              <i className="bi bi-eye-fill text-terracotta" />
+              <span className="text-base font-bold text-warm-brown">{business.profileViews ?? 0}</span>
             </div>
+            <div className="flex flex-1 items-center justify-center gap-1.5">
+              <i className="bi bi-heart-fill text-gold" />
+              <span className="text-base font-bold text-warm-brown">{business.savesCount ?? 0}</span>
+            </div>
+            <div className="flex flex-1 items-center justify-center gap-1.5">
+              <i className="bi bi-share-fill text-olive" />
+              <span className="text-base font-bold text-warm-brown">{business.sharesCount ?? 0}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <p className="text-sm text-warm-clay">
+              Tier: <span className="font-semibold text-warm-brown">{tierLabel(business.tier)}</span>
+            </p>
             {business.tier !== "PREMIUM" && (
               <button
                 onClick={() => document.getElementById("subscription-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                className="rounded-full bg-terracotta px-4 py-2 text-sm font-semibold text-white"
+                className="text-sm font-semibold text-terracotta"
               >
-                {subStatus?.trialOffer && !subStatus.activeTrial ? "Start Free Trial" : "Upgrade"}
+                {subStatus?.trialOffer && !subStatus.activeTrial
+                  ? "Free Trial"
+                  : (business.discountPercent ?? 0) > 0
+                    ? "Discount"
+                    : "Upgrade"}
               </button>
             )}
           </div>
@@ -373,38 +408,6 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
         <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
       </div>
       <div className="text-2xl font-bold text-warm-brown">{value}</div>
-    </div>
-  );
-}
-
-// Mobile's own stat treatment, not a shrunken StatCard (Val, Sep 2026:
-// "I still don't like the cards in the mobile though"). A colored
-// circular icon badge per stat — using the brand's own terracotta/
-// gold/olive trio, not invented colors — gives each number a visual
-// identity instead of three identical bare figures in a divided strip.
-function MobileStatCard({
-  icon,
-  value,
-  label,
-  color,
-}: {
-  icon: string;
-  value: string | number;
-  label: string;
-  color: "terracotta" | "gold" | "olive";
-}) {
-  const badgeClass = {
-    terracotta: "bg-[rgba(199,101,58,0.12)] text-terracotta",
-    gold: "bg-[rgba(232,167,74,0.16)] text-gold",
-    olive: "bg-[rgba(93,96,65,0.12)] text-olive",
-  }[color];
-  return (
-    <div className="rounded-2xl border border-border bg-surface px-2 py-3.5 text-center">
-      <div className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full ${badgeClass}`}>
-        <i className={`bi ${icon} text-sm`} />
-      </div>
-      <div className="text-lg font-bold leading-none text-warm-brown">{value}</div>
-      <div className="mt-1 text-[0.68rem] font-semibold text-warm-clay">{label}</div>
     </div>
   );
 }
@@ -1139,7 +1142,12 @@ function PlanCard({
           {mode === "selectable" && selected && <i className="bi bi-check-circle-fill text-terracotta" />}
           {tierKey === "STARTER" ? "Starter" : tierKey === "GROWTH" ? "🌟 Featured" : "✨ Premium"}
         </span>
-        <span className="text-sm font-semibold text-warm-brown">{priceDisplay}</span>
+        {/* Hidden specifically on the business's own active tier (Val,
+            Sep 2026: "hide package price on active tier") — the price
+            of the plan you're already on isn't something you need
+            restated back to you; it's only useful info on a plan
+            you're considering switching to. */}
+        {mode !== "current" && <span className="text-sm font-semibold text-warm-brown">{priceDisplay}</span>}
       </div>
       {mode === "current" && (
         <span className="mb-2 inline-block rounded-full bg-[rgba(93,96,65,0.12)] px-2.5 py-1 text-xs font-semibold text-olive">
