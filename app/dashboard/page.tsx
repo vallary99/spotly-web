@@ -14,6 +14,7 @@ import { Select } from "@/components/Select";
 import { Lightbox } from "@/components/Lightbox";
 import { DashboardGallery } from "@/components/DashboardGallery";
 import { DashboardProducts } from "@/components/DashboardProducts";
+import { OfferManager } from "@/components/OfferManager";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
@@ -333,6 +334,11 @@ export default function DashboardPage() {
                     businessBudgetMax={business.budgetMax ?? null}
                     onChanged={load}
                   />
+                )}
+                {business.type !== "EXPERIENCE_HOST" && (
+                  <div className="mt-8">
+                    <OfferManager businessId={businessId} />
+                  </div>
                 )}
               </>
             )}

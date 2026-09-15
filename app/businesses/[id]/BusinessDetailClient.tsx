@@ -9,10 +9,11 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { BusinessCard } from "@/components/BusinessCard";
 import { ExperienceCard } from "@/components/ExperienceCard";
+import { OfferCard } from "@/components/OfferCard";
 import { ReviewModal } from "@/components/ReviewModal";
 import { useAuth } from "@/components/AuthContext";
 import { useToast } from "@/components/ToastContext";
-import { api, ApiError, type Business, type Experience, type ReviewSummary } from "@/lib/api";
+import { api, ApiError, type Business, type Experience, type Offer, type ReviewSummary } from "@/lib/api";
 import { isAllowedImageUrl } from "@/lib/placeholders";
 import { amenityIcon } from "@/lib/amenityIcons";
 import { computeOpenStatus, DAYS } from "@/lib/hours";
@@ -32,6 +33,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
 
   const [business, setBusiness] = useState<Business | null>(null);
   const [experienceHistory, setExperienceHistory] = useState<Experience[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
   const [related, setRelated] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
     // hostingHistory is the actual complete record (FR-9.4), public,
     // used here so Past Events has real data instead of nothing.
     api.businesses.hostingHistory(id).then(setExperienceHistory).catch(() => {});
+    api.offers.listActiveForBusiness(id).then(setOffers).catch(() => {});
     loadReviews().catch(() => {}); // same id maps to no reviews either; the page's own !business branch is what actually matters here
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -328,6 +331,21 @@ export default function BusinessDetailClient({ id }: { id: string }) {
                         <div key={a} className="flex items-center gap-2 text-sm">
                           <i className={`bi ${amenityIcon(a)} text-terracotta`} /> {a}
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Offers — currently running or upcoming deals for
+                    THIS business (Val, Sep 2026), shown right before
+                    Upcoming Experiences since both are "things
+                    happening here worth knowing about." */}
+                {offers.length > 0 && (
+                  <div className="mb-[26px] rounded-spotly border border-border bg-surface p-[26px]">
+                    <h2 className="mb-3.5 text-xl text-warm-brown">Offers</h2>
+                    <div className="h-scroll flex gap-4 overflow-x-auto">
+                      {offers.map((o) => (
+                        <OfferCard key={o.id} offer={o} />
                       ))}
                     </div>
                   </div>

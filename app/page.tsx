@@ -8,6 +8,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { BusinessCard } from "@/components/BusinessCard";
 import { BusinessCardRowSkeleton } from "@/components/Skeleton";
 import { ExperienceCard } from "@/components/ExperienceCard";
+import { OfferCard } from "@/components/OfferCard";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/ToastContext";
 import { api, type HomeResponse, type Business } from "@/lib/api";
@@ -456,6 +457,21 @@ export default function HomePage() {
               <div className="h-scroll flex gap-[18px] overflow-x-auto pb-3.5">
                 {data.rails.madeInKenya.map((b) => (
                   <BusinessCard key={b.id} business={b} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* OFFERS — currently running or upcoming deals (Val, Sep
+              2026), hidden entirely when empty, same reasoning as the
+              Made in Kenya rail above: a new, possibly-sparse section
+              shouldn't show an empty placeholder heading. */}
+          {data && data.rails.offers.length > 0 && (
+            <div className="px-11 pt-[38px] max-md:px-[18px]">
+              <SectionHeader title="Offers & Deals" />
+              <div className="h-scroll flex gap-[18px] overflow-x-auto pb-3.5">
+                {data.rails.offers.map((o) => (
+                  <OfferCard key={o.id} offer={o} />
                 ))}
               </div>
             </div>

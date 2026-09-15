@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
 import { Logo } from "./Logo";
+import { PasswordInput } from "./PasswordInput";
 import { ApiError, api } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export function AuthModal() {
+  const router = useRouter();
   const { authModalOpen, closeAuthModal, signup, login, onAuthSuccess } = useAuth();
   const { showToast } = useToast();
   const [mode, setMode] = useState<"choose" | "email-signup" | "email-login" | "forgot-password">("choose");
@@ -19,6 +22,14 @@ export function AuthModal() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // Set specifically when login fails because the account isn't
+  // verified yet (a 403, distinct from the 401 "wrong password" case —
+  // see auth.service.ts's login()) — shows a resend option right here
+  // instead of just an error, since they can't get to the in-app
+  // verification banner without being able to log in first (Val, Sep
+  // 2026: "do not allow login until email is verified").
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
 
   if (!authModalOpen) return null;
 
@@ -29,6 +40,7 @@ export function AuthModal() {
     setPassword("");
     setError(null);
     setResetSent(false);
+    setNeedsVerification(false);
   };
 
   const handleClose = () => {
@@ -53,11 +65,18 @@ export function AuthModal() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
     setBusy(true);
     try {
       if (mode === "email-signup") {
-        await signup(email, password, name);
-        showToast("Welcome to Spotly!");
+        // No auth to hydrate anymore — signup doesn't sign anyone in
+        // until they've actually verified (Val, Sep 2026). Route to the
+        // persistent "check your email" screen instead of closing the
+        // modal as if they were done.
+        const res = await signup(email, password, name);
+        handleClose();
+        router.push(`/check-email?email=${encodeURIComponent(res.email)}&expiresAt=${encodeURIComponent(res.verificationExpiresAt)}`);
+        return;
       } else {
         await login(email, password);
         showToast("Welcome back!");
@@ -65,9 +84,26 @@ export function AuthModal() {
       onAuthSuccess?.();
       handleClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      if (err instanceof ApiError && err.status === 403) {
+        setNeedsVerification(true);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendBusy(true);
+    try {
+      await api.auth.resendVerification(email);
+      showToast("Verification email sent — check your inbox.");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Couldn't send that, try again.");
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -151,17 +187,24 @@ export function AuthModal() {
               </label>
               <label className="mb-4 block">
                 <span className="mb-1 block text-xs font-semibold text-warm-clay">Password</span>
-                <input
-                  required
-                  type="password"
-                  minLength={8}
+                <PasswordInput
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-full border border-border bg-cream px-4 py-2.5 text-sm outline-none focus:border-terracotta"
+                  onChange={setPassword}
                   placeholder="At least 8 characters"
+                  autoComplete={mode === "email-signup" ? "new-password" : "current-password"}
                 />
               </label>
               {error && <p className="mb-3 text-sm text-error">{error}</p>}
+              {needsVerification && (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendBusy}
+                  className="mb-3 w-full rounded-full border border-terracotta py-2.5 text-sm font-semibold text-terracotta disabled:opacity-60"
+                >
+                  {resendBusy ? "Sending…" : "Resend verification email"}
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={busy}

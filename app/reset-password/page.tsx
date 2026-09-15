@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
+import { PasswordInput } from "@/components/PasswordInput";
 import { api, ApiError } from "@/lib/api";
 
 function ResetPasswordForm() {
@@ -62,26 +63,11 @@ function ResetPasswordForm() {
             <p className="mb-6 text-sm text-warm-clay">Choose a new password for your account.</p>
             <label className="mb-3 block">
               <span className="mb-1 block text-xs font-semibold text-warm-clay">New password</span>
-              <input
-                required
-                type="password"
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-full border border-border bg-cream px-4 py-2.5 text-sm outline-none focus:border-terracotta"
-                placeholder="At least 8 characters"
-              />
+              <PasswordInput value={password} onChange={setPassword} placeholder="At least 8 characters" autoComplete="new-password" />
             </label>
             <label className="mb-4 block">
               <span className="mb-1 block text-xs font-semibold text-warm-clay">Confirm password</span>
-              <input
-                required
-                type="password"
-                minLength={8}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                className="w-full rounded-full border border-border bg-cream px-4 py-2.5 text-sm outline-none focus:border-terracotta"
-              />
+              <PasswordInput value={confirm} onChange={setConfirm} autoComplete="new-password" />
             </label>
             {error && <p className="mb-4 text-sm text-error">{error}</p>}
             <button

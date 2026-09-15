@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, setToken, clearToken, isAuthed, decodeToken, ApiError } from "@/lib/api";
+import { api, setToken, clearToken, isAuthed, decodeToken, ApiError, type SignupResponse } from "@/lib/api";
 import { useToast } from "./ToastContext";
 
 interface User {
@@ -20,7 +20,7 @@ interface AuthContextValue {
   onAuthSuccess: (() => void) | null;
   openAuthModal: (onSuccess?: () => void) => void;
   closeAuthModal: () => void;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<SignupResponse>;
   login: (email: string, password: string) => Promise<void>;
   hydrateFromToken: (token: string) => void;
   hydrateFromAuthResponse: (res: { accessToken: string; user: User }) => void;
@@ -106,9 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBusinessId(decodeToken()?.businessId ?? null);
   };
 
+  // No token in the response anymore — signup no longer auto-signs
+  // someone in (Val, Sep 2026: "signup, signup success, notify user of
+  // verification sent to email" — they stay logged out until they
+  // actually verify). Returns the signup response directly so the
+  // caller (AuthModal) can show the right "check your email" screen
+  // with the real expiry it needs to track.
   const signup = useCallback(async (email: string, password: string, name: string) => {
-    const res = await api.auth.signup({ email, password, name });
-    persist(res);
+    return api.auth.signup({ email, password, name });
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

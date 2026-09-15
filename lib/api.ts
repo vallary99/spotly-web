@@ -190,6 +190,21 @@ export interface Product {
   businessName?: string;
 }
 
+export interface Offer {
+  id: string;
+  businessId: string;
+  name: string;
+  description: string | null;
+  scheduleType: "SINGLE_DAY" | "DATE_RANGE" | "WEEKLY";
+  startDate: string;
+  endDate: string | null;
+  daysOfWeek: string[];
+  createdAt: string;
+  // Only present on the home rail's version, same reasoning as
+  // Product.businessName above.
+  businessName?: string;
+}
+
 export interface Experience {
   id: string;
   businessId: string;
@@ -237,6 +252,7 @@ export interface HomeResponse {
     popularNearYou: Business[];
     upcomingExperiences: Experience[];
     madeInKenya: Business[];
+    offers: Offer[];
   };
 }
 
@@ -245,12 +261,18 @@ export interface AuthResponse {
   user: { id: string; email: string; name: string; role: string; emailVerified: boolean };
 }
 
+export interface SignupResponse {
+  message: string;
+  email: string;
+  verificationExpiresAt: string;
+}
+
 // ---------- API calls ----------
 
 export const api = {
   auth: {
     signup: (dto: { email: string; password: string; name: string }) =>
-      request<AuthResponse>("/auth/signup", {
+      request<SignupResponse>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({ ...dto, verifyUrlBase: typeof window !== "undefined" ? window.location.origin : "" }),
         auth: false,
@@ -440,5 +462,24 @@ export const api = {
       request<ProductImage>(`/businesses/${businessId}/products/${productId}/images?${query}`, { method: "POST", body: formData }),
     removeImage: (businessId: string, productId: string, imageId: string) =>
       request(`/businesses/${businessId}/products/${productId}/images/${imageId}`, { method: "DELETE" }),
+  },
+  offers: {
+    // Public — a business's own currently-running/upcoming offers, for
+    // its profile page (Val, Sep 2026).
+    listActiveForBusiness: (businessId: string) => request<Offer[]>(`/businesses/${businessId}/offers`, { auth: false }),
+    // Owner-only — every offer regardless of whether it's ended, for
+    // the dashboard's own management view.
+    listForBusiness: (businessId: string) => request<Offer[]>(`/businesses/${businessId}/offers/manage`),
+    create: (
+      businessId: string,
+      dto: { name: string; description?: string; scheduleType: Offer["scheduleType"]; startDate: string; endDate?: string; daysOfWeek?: string[] },
+    ) => request<Offer>(`/businesses/${businessId}/offers`, { method: "POST", body: JSON.stringify(dto) }),
+    update: (
+      businessId: string,
+      offerId: string,
+      dto: Partial<{ name: string; description: string; scheduleType: Offer["scheduleType"]; startDate: string; endDate: string; daysOfWeek: string[] }>,
+    ) => request<Offer>(`/businesses/${businessId}/offers/${offerId}`, { method: "PUT", body: JSON.stringify(dto) }),
+    remove: (businessId: string, offerId: string) =>
+      request(`/businesses/${businessId}/offers/${offerId}`, { method: "DELETE" }),
   },
 };

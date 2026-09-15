@@ -37,13 +37,15 @@ function VerifyEmailContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Signed in now (see above), so this can send them straight back into
-  // whatever they were most likely blocked from — creating a business,
-  // if they don't have one yet, since that's the one thing verification
-  // is currently required for (Val, Sep 2026) — or their dashboard if
-  // they already do.
-  const nextHref = businessId ? "/dashboard" : "/business/new";
-  const nextLabel = businessId ? "Go to your dashboard" : "Continue listing your business";
+  // Signed in now (see above). Used to default to /business/new for
+  // anyone without a business yet, on the assumption that's what
+  // verification was "for" — wrong assumption (Val, Sep 2026: "not
+  // everyone wants to list their business") — most people verifying
+  // their email are just regular consumer signups, not business
+  // owners. Home page is the right default; dashboard only for someone
+  // who already has a business.
+  const nextHref = businessId ? "/dashboard" : "/";
+  const nextLabel = businessId ? "Go to your dashboard" : "Continue to Spotly";
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-5">
