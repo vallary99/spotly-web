@@ -806,6 +806,10 @@ function ExperienceManager({
   const [endsAt, setEndsAt] = useState("");
   const [location, setLocation] = useState("");
   const [ticketingLink, setTicketingLink] = useState("");
+  const [unlimitedCapacity, setUnlimitedCapacity] = useState(true);
+  const [capacity, setCapacity] = useState("");
+  const [paymentTiming, setPaymentTiming] = useState<"ADVANCE" | "AT_VENUE" | "EITHER">("AT_VENUE");
+  const [instructions, setInstructions] = useState("");
   const [price, setPrice] = useState("");
   const [useBusinessBudget, setUseBusinessBudget] = useState(true);
   const [budgetMin, setBudgetMin] = useState("");
@@ -835,6 +839,10 @@ function ExperienceManager({
     setEndsAt("");
     setLocation("");
     setTicketingLink("");
+    setUnlimitedCapacity(true);
+    setCapacity("");
+    setPaymentTiming("AT_VENUE");
+    setInstructions("");
     setPrice("");
     setUseBusinessBudget(hasBusinessBudget);
     setBudgetMin("");
@@ -868,6 +876,10 @@ function ExperienceManager({
     setBudgetMin(inherited ? "" : exp.budgetMin != null ? String(exp.budgetMin) : "");
     setBudgetMax(inherited ? "" : exp.budgetMax != null ? String(exp.budgetMax) : "");
     setCoverImage(exp.images[0] || null);
+    setUnlimitedCapacity(exp.capacity == null);
+    setCapacity(exp.capacity != null ? String(exp.capacity) : "");
+    setPaymentTiming(exp.paymentTiming ?? "AT_VENUE");
+    setInstructions(exp.instructions || "");
     setError(null);
     setShowForm(true);
   };
@@ -917,6 +929,9 @@ function ExperienceManager({
       // numbers.
       budgetMin: useBusinessBudget ? null : budgetMin ? parseFloat(budgetMin) : undefined,
       budgetMax: useBusinessBudget ? null : budgetMax ? parseFloat(budgetMax) : undefined,
+      capacity: unlimitedCapacity ? null : capacity ? Number(capacity) : undefined,
+      paymentTiming,
+      instructions: instructions.trim() || undefined,
     };
     try {
       if (editingId) {
@@ -961,6 +976,9 @@ function ExperienceManager({
       ticketingLink: ticketingLink || undefined,
       price: price ? Number(price) : undefined,
       images: coverImage ? [coverImage] : undefined,
+      capacity: unlimitedCapacity ? undefined : capacity ? Number(capacity) : undefined,
+      paymentTiming,
+      instructions: instructions.trim() || undefined,
     };
     try {
       if (editingId) {
@@ -1070,6 +1088,77 @@ function ExperienceManager({
             placeholder="Ticketing link (optional)"
             className={inputClass}
           />
+
+          {/* Val, Sep 2026: "limited or unlimited attendees." */}
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold text-warm-clay">Attendees</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setUnlimitedCapacity(true)}
+                className={`flex-1 rounded-full border py-2 text-sm font-semibold transition ${
+                  unlimitedCapacity ? "border-terracotta bg-terracotta text-white" : "border-border bg-surface text-text"
+                }`}
+              >
+                Open to everyone
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnlimitedCapacity(false)}
+                className={`flex-1 rounded-full border py-2 text-sm font-semibold transition ${
+                  !unlimitedCapacity ? "border-terracotta bg-terracotta text-white" : "border-border bg-surface text-text"
+                }`}
+              >
+                Limited spots
+              </button>
+            </div>
+            {!unlimitedCapacity && (
+              <input
+                type="number"
+                min={1}
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                placeholder="Max number of attendees"
+                className={`${inputClass} mt-2`}
+              />
+            )}
+          </div>
+
+          {/* Val, Sep 2026: "pay in advance or at the venue or both
+              (use better wordings)." */}
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold text-warm-clay">How attendees pay</span>
+            <div className="flex gap-2">
+              {([
+                { value: "ADVANCE", label: "Pay in advance" },
+                { value: "AT_VENUE", label: "Pay at the venue" },
+                { value: "EITHER", label: "Either works" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPaymentTiming(opt.value)}
+                  className={`flex-1 rounded-full border py-2 text-xs font-semibold transition ${
+                    paymentTiming === opt.value ? "border-terracotta bg-terracotta text-white" : "border-border bg-surface text-text"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Val, Sep 2026: optional instructions field. */}
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-warm-clay">Instructions (optional)</span>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              rows={3}
+              placeholder="Anything attendees should know — what to bring, parking, dress code..."
+              className={inputClass}
+            />
+          </label>
           <div className="grid grid-cols-3 gap-3">
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-warm-clay">Price (KES)</span>

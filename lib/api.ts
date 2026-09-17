@@ -226,6 +226,9 @@ export interface Experience {
   // components can just show budgetMin/budgetMax either way.
   inheritedBudget?: boolean;
   ticketingLink?: string | null;
+  capacity?: number | null;
+  paymentTiming: "ADVANCE" | "AT_VENUE" | "EITHER";
+  instructions?: string | null;
   isExpired: boolean;
   isDraft: boolean;
 }

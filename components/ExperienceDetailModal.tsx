@@ -2,11 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Experience } from "@/lib/api";
+
+const PAYMENT_TIMING_LABEL: Record<string, string> = {
+  ADVANCE: "Pay in advance",
+  AT_VENUE: "Pay at the venue",
+  EITHER: "Pay in advance or at the venue",
+};
 
 export function ExperienceDetailModal({ experience, onClose }: { experience: Experience; onClose: () => void }) {
   const [imgErrored, setImgErrored] = useState(false);
+  const instructionsRef = useRef<HTMLDivElement>(null);
   const startDate = experience.startsAt ? new Date(experience.startsAt) : new Date();
   const endDate = experience.endsAt ? new Date(experience.endsAt) : null;
   const dateOptions: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric" };
@@ -15,6 +22,18 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
   // treatment as ExperienceCard/BusinessCard — checking images[0] alone
   // only confirms a URL was submitted, not that it actually loads.
   const showImage = experience.images[0] && !imgErrored;
+
+  // "More instructions... when clicked should activate a scroll
+  // function if need be" (Val, Sep 2026) — scrollIntoView only actually
+  // moves anything when the target isn't already fully in view, so a
+  // short instructions block that's already visible just... doesn't
+  // scroll, which is exactly the "if need be" part. Works correctly
+  // inside this modal's own scrollable container without any extra
+  // wiring, since scrollIntoView scrolls the nearest scrollable
+  // ancestor, not necessarily the whole page.
+  const scrollToInstructions = () => {
+    instructionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div
@@ -84,10 +103,40 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
                 <div>KES {experience.price.toLocaleString()}</div>
               </div>
             )}
+            {/* Val, Sep 2026: capacity + payment timing. Capacity only
+                shown when actually limited — "open to everyone" isn't a
+                constraint worth a line of its own. */}
+            {experience.capacity != null && (
+              <div className="flex items-start gap-2.5">
+                <i className="bi bi-people mt-0.5 text-terracotta" />
+                <div>Limited to {experience.capacity} attendee{experience.capacity === 1 ? "" : "s"}</div>
+              </div>
+            )}
+            {experience.paymentTiming && (
+              <div className="flex items-start gap-2.5">
+                <i className="bi bi-cash-coin mt-0.5 text-terracotta" />
+                <div>{PAYMENT_TIMING_LABEL[experience.paymentTiming] ?? experience.paymentTiming}</div>
+              </div>
+            )}
           </div>
 
           {experience.description && (
-            <p className="mb-5 text-sm leading-relaxed text-text">{experience.description}</p>
+            <p className="mb-2 text-sm leading-relaxed text-text">{experience.description}</p>
+          )}
+
+          {/* Val, Sep 2026: "The user should see this as 'more
+              instructions' which when clicked should activate a scroll
+              function." A link right after the description, the actual
+              content sits further down so there's something to scroll
+              to in the first place. */}
+          {experience.instructions && (
+            <button
+              type="button"
+              onClick={scrollToInstructions}
+              className="mb-5 text-sm font-semibold text-terracotta hover:underline"
+            >
+              More instructions <i className="bi bi-chevron-down text-xs" />
+            </button>
           )}
 
           {experience.ticketingLink && (
@@ -95,7 +144,7 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
               href={experience.ticketingLink.startsWith("http") ? experience.ticketingLink : `https://${experience.ticketingLink}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full rounded-full bg-terracotta py-3 text-center text-sm font-semibold text-white hover:bg-[#b5572f]"
+              className="mb-5 block w-full rounded-full bg-terracotta py-3 text-center text-sm font-semibold text-white hover:bg-[#b5572f]"
               onClick={(e) => {
                 // A non-URL-looking value (e.g. "Walk-ins welcome, no
                 // ticket needed") is still valid content for this field
@@ -110,6 +159,13 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
                 ? "Get tickets"
                 : experience.ticketingLink}
             </a>
+          )}
+
+          {experience.instructions && (
+            <div ref={instructionsRef} className="rounded-2xl border border-border bg-cream p-4">
+              <h3 className="mb-1.5 text-sm font-semibold text-warm-brown">Instructions</h3>
+              <p className="whitespace-pre-wrap text-sm text-text">{experience.instructions}</p>
+            </div>
           )}
         </div>
       </div>
