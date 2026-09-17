@@ -181,10 +181,11 @@ export interface Product {
   businessId: string;
   name: string;
   description: string | null;
-  price: number;
+  price: number | null;
   currency: string;
   images: ProductImage[];
   createdAt: string;
+  isDraft: boolean;
   // Only present on the home rail's version of a product, not the
   // owner-facing GET /businesses/:id/products list.
   businessName?: string;
@@ -212,7 +213,7 @@ export interface Experience {
   title: string;
   description?: string | null;
   images: string[];
-  startsAt: string;
+  startsAt: string | null;
   endsAt?: string | null;
   location?: string | null;
   price?: number | null;
@@ -226,6 +227,7 @@ export interface Experience {
   inheritedBudget?: boolean;
   ticketingLink?: string | null;
   isExpired: boolean;
+  isDraft: boolean;
 }
 
 export interface ReviewSummary {
@@ -327,6 +329,7 @@ export const api = {
     // itself (Val, Sep 2026: "add shares on that row").
     recordShare: (id: string) => request(`/businesses/${id}/share`, { method: "POST", auth: false }).catch(() => {}),
     hostingHistory: (id: string) => request<Experience[]>(`/businesses/${id}/experiences/history`, { auth: false }),
+    hostingHistoryForOwner: (id: string) => request<Experience[]>(`/businesses/${id}/experiences/history/manage`),
     create: (dto: Record<string, unknown>) =>
       request<Business>("/businesses", { method: "POST", body: JSON.stringify(dto) }),
     update: (id: string, dto: Record<string, unknown>) =>
@@ -359,6 +362,10 @@ export const api = {
     },
     create: (businessId: string, dto: Record<string, unknown>) =>
       request<Experience>(`/businesses/${businessId}/experiences`, { method: "POST", body: JSON.stringify(dto) }),
+    saveDraft: (businessId: string, dto: Record<string, unknown>) =>
+      request<Experience>(`/businesses/${businessId}/experiences/drafts`, { method: "POST", body: JSON.stringify(dto) }),
+    publishDraft: (businessId: string, experienceId: string) =>
+      request<Experience>(`/businesses/${businessId}/experiences/${experienceId}/publish`, { method: "PUT" }),
     update: (id: string, dto: Record<string, unknown>) =>
       request<Experience>(`/experiences/${id}`, { method: "PUT", body: JSON.stringify(dto) }),
     remove: (id: string) => request(`/experiences/${id}`, { method: "DELETE" }),
@@ -446,9 +453,18 @@ export const api = {
     // single-product page's data source (Val, Sep 2026: "should also
     // be shareable").
     getOne: (id: string) => request<Product>(`/products/${id}`, { auth: false }),
+    // Public — excludes drafts and requires an APPROVED business (Val,
+    // Sep 2026's draft feature). What CatalogueSection reads from.
     listForBusiness: (businessId: string) => request<Product[]>(`/businesses/${businessId}/products`),
+    // Owner-only — every product regardless of draft status, for the
+    // dashboard's Catalogue tab.
+    listAllForOwner: (businessId: string) => request<Product[]>(`/businesses/${businessId}/products/manage`),
     create: (businessId: string, dto: { name: string; description?: string; price: number }) =>
       request<Product>(`/businesses/${businessId}/products`, { method: "POST", body: JSON.stringify(dto) }),
+    saveDraft: (businessId: string, dto: { name?: string; description?: string; price?: number }) =>
+      request<Product>(`/businesses/${businessId}/products/drafts`, { method: "POST", body: JSON.stringify(dto) }),
+    publishDraft: (businessId: string, productId: string) =>
+      request<Product>(`/businesses/${businessId}/products/${productId}/publish`, { method: "PUT" }),
     update: (businessId: string, productId: string, dto: { name?: string; description?: string; price?: number }) =>
       request<Product>(`/businesses/${businessId}/products/${productId}`, { method: "PUT", body: JSON.stringify(dto) }),
     remove: (businessId: string, productId: string) =>

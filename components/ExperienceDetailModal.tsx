@@ -7,7 +7,7 @@ import type { Experience } from "@/lib/api";
 
 export function ExperienceDetailModal({ experience, onClose }: { experience: Experience; onClose: () => void }) {
   const [imgErrored, setImgErrored] = useState(false);
-  const startDate = new Date(experience.startsAt);
+  const startDate = experience.startsAt ? new Date(experience.startsAt) : new Date();
   const endDate = experience.endsAt ? new Date(experience.endsAt) : null;
   const dateOptions: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric" };
   const timeOptions: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };

@@ -53,7 +53,7 @@ export function CatalogueSection({
               )}
             </div>
             <p className="truncate text-sm font-semibold text-text">{p.name}</p>
-            <p className="text-xs text-terracotta">{p.currency} {p.price.toLocaleString()}</p>
+            <p className="text-xs text-terracotta">{p.currency} {p.price?.toLocaleString() ?? "—"}</p>
           </button>
         ))}
       </div>
@@ -156,7 +156,7 @@ function ProductViewer({
               <i className="bi bi-share" />
             </button>
           </div>
-          <p className="mb-3 font-semibold text-terracotta">{product.currency} {product.price.toLocaleString()}</p>
+          <p className="mb-3 font-semibold text-terracotta">{product.currency} {product.price?.toLocaleString() ?? "—"}</p>
           {product.description && <p className="text-sm text-text">{product.description}</p>}
         </div>
       </div>

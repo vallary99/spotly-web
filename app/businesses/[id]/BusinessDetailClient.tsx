@@ -47,7 +47,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
   // gallery scroll — every tier gets this now, not just paid ones (see
   // the layout branch below for why that changed). "catalogue" only
   // ever applies to Made in Kenya businesses.
-  const [activeTab, setActiveTab] = useState<"photos" | "about" | "catalogue">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "about" | "catalogue" | "past-events">("photos");
   // ?product= — a shared product link lands here rather than a
   // dedicated product page (Val, Sep 2026: "Is there a way to share a
   // product without having a dedicated page for it?"). Read once on
@@ -363,17 +363,6 @@ export default function BusinessDetailClient({ id }: { id: string }) {
                   </div>
                 )}
 
-                {pastExperiences.length > 0 && (
-                  <div className="mb-[26px] rounded-spotly border border-border bg-surface p-[26px]">
-                    <h2 className="mb-3.5 text-xl text-warm-brown">Past Events</h2>
-                    <div className="h-scroll flex gap-4 overflow-x-auto">
-                      {pastExperiences.map((e) => (
-                        <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name }} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Reviews */}
                 <div className="rounded-spotly border border-border bg-surface p-[26px]">
                   <h2 className="mb-3.5 text-xl text-warm-brown">Reviews</h2>
@@ -605,13 +594,37 @@ export default function BusinessDetailClient({ id }: { id: string }) {
                   <i className="bi bi-bag mr-1.5" /> Catalogue
                 </button>
               )}
+              {/* Promoted out of the About tab into its own, same level
+                  as Gallery (Val, Sep 2026) — only shown once there's
+                  something to show, same as Catalogue above. */}
+              {pastExperiences.length > 0 && (
+                <button
+                  onClick={() => setActiveTab("past-events")}
+                  className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                    activeTab === "past-events" ? "border-terracotta text-terracotta" : "border-transparent text-warm-clay hover:text-text"
+                  }`}
+                >
+                  <i className="bi bi-clock-history mr-1.5" /> Past Events
+                </button>
+              )}
             </div>
             <div className="px-11 pt-6 max-md:px-4">
               {activeTab === "catalogue" && (
                 <CatalogueSection businessId={business.id} autoOpenProductId={deepLinkedProductId} />
               )}
+              {/* Just cards, no header/wrapper card the way it had one
+                  nested inside the About tab — this IS the tab now, so
+                  it doesn't need its own boxed section inside another
+                  page (Val, Sep 2026: "just cards"). */}
+              {activeTab === "past-events" && (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+                  {pastExperiences.map((e) => (
+                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name }} />
+                  ))}
+                </div>
+              )}
             </div>
-            {activeTab !== "catalogue" && (
+            {activeTab !== "catalogue" && activeTab !== "past-events" && (
               <div className="pt-6">{activeTab === "photos" ? galleryBlock : aboutContentBlock}</div>
             )}
           </>

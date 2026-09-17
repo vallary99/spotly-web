@@ -29,8 +29,8 @@ export function ExperienceCard({ experience }: { experience: Experience }) {
   const [busy, setBusy] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [imgErrored, setImgErrored] = useState(false);
-  const date = new Date(experience.startsAt);
-  const dateLabel = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const date = experience.startsAt ? new Date(experience.startsAt) : null;
+  const dateLabel = date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
   // No stock-photo fallback — same "blank panel, never a placeholder"
   // treatment as BusinessCard. Cover image is a mandatory field at
   // creation now, so this really only matters for older data or a

@@ -214,7 +214,8 @@ export default function NewBusinessPage() {
         longitude: longitude ?? undefined,
         website: website || undefined,
         city,
-        neighborhood,
+        // Never sent for Experience Host — see the field itself for why.
+        neighborhood: type === "EXPERIENCE_HOST" ? undefined : neighborhood,
         amenities,
         reservationPolicy: type === "MADE_IN_KENYA" ? undefined : (reservationPolicy || undefined),
         budgetMin: type === "MADE_IN_KENYA" ? undefined : (budgetMin ? parseFloat(budgetMin) : undefined),
@@ -326,19 +327,24 @@ export default function NewBusinessPage() {
           </div>
 
           {/* The explanation + confirmation gate — nothing else in the
-              form renders until this is checked (Val, Sep 2026). */}
+              form renders until this is checked (Val, Sep 2026).
+              Shortened and de-headlined (Val, Sep 2026 round 2) — the
+              original long paragraph under a formal "What X means"
+              title mostly repeated what the selection card above it
+              already said, adding scroll depth for no real benefit;
+              three short lines read faster and don't need a heading to
+              feel legible. */}
           {type === "MADE_IN_KENYA" && !mikUnderstood && (
-            <div className="rounded-spotly border border-terracotta bg-[rgba(199,101,58,0.06)] p-5">
-              <h3 className="mb-2 font-semibold text-warm-brown">What "Made in Kenya" means on Spotly</h3>
-              <p className="mb-4 text-sm text-text">
-                Made in Kenya 🇰🇪 — products designed, produced, crafted or manufactured in Kenya. This isn't a
-                category any business can self-select just because it's Kenyan-based — every application is
-                reviewed before it goes live, and only genuine makers get approved. Once approved, you'll be able
-                to add photos and start posting your product catalogue.
+            <div className="rounded-spotly border border-terracotta bg-[rgba(199,101,58,0.06)] p-4">
+              <p className="mb-3 text-sm text-text">
+                🇰🇪 Made in Kenya is for products designed, crafted, produced or manufactured in Kenya.
               </p>
-              <label className="mb-4 flex items-start gap-2.5 text-sm">
+              <p className="mb-4 text-sm text-text">
+                Showcase your products on Spotly and help more people discover and shop locally made products.
+              </p>
+              <label className="mb-1 flex items-start gap-2.5 text-sm">
                 <input type="checkbox" checked={mikUnderstood} onChange={(e) => setMikUnderstood(e.target.checked)} className="mt-0.5" />
-                <span>I understand, and my products are genuinely made, designed, crafted or manufactured in Kenya.</span>
+                <span>I confirm that my products are genuinely made, designed, crafted or manufactured in Kenya.</span>
               </label>
             </div>
           )}
@@ -473,13 +479,27 @@ export default function NewBusinessPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Neighborhood / Area">
-              <Select
-                value={neighborhood}
-                onChange={setNeighborhood}
-                options={LOCATIONS_BY_CITY[city].map((n) => ({ value: n, label: n }))}
-              />
-            </Field>
+            {/* Experience Host has no fixed venue, so a specific
+                neighborhood doesn't apply — their events could happen
+                anywhere across the city (Val, Sep 2026). City instead,
+                even though it's currently a single-option dropdown
+                (Nairobi-only launch) — still the more correct field for
+                this business type, and future-proof once more cities
+                launch. Venue keeps neighborhood, since it does have one
+                fixed, specific location. */}
+            {type === "EXPERIENCE_HOST" ? (
+              <Field label="City">
+                <Select value={city} onChange={setCity} options={CITIES.map((c) => ({ value: c, label: c }))} />
+              </Field>
+            ) : (
+              <Field label="Neighborhood / Area">
+                <Select
+                  value={neighborhood}
+                  onChange={setNeighborhood}
+                  options={LOCATIONS_BY_CITY[city].map((n) => ({ value: n, label: n }))}
+                />
+              </Field>
+            )}
             <Field label="Reservation Policy">
               <Select
                 value={reservationPolicy}

@@ -110,7 +110,7 @@ export default function DashboardPage() {
         api.businesses.get(businessId),
         api.subscriptions.tiers() as Promise<Record<string, TierLimits>>,
         api.subscriptions.status(businessId),
-        api.businesses.hostingHistory(businessId),
+        api.businesses.hostingHistoryForOwner(businessId),
       ]);
       setBusiness(b);
       setTiers(t);
@@ -182,16 +182,25 @@ export default function DashboardPage() {
       <div className="px-11 pt-8 pb-16 max-md:px-4">
         <div className="mb-6"><EditableHeading business={business} onSaved={load} /></div>
 
-        {!hasApprovedPhoto(business) && (
+        {!isDiscoverable(business, hostingHistory) && (
           <div className="mb-8 flex items-start gap-3 rounded-spotly border border-terracotta bg-[rgba(199,101,58,0.08)] p-5">
             <i className="bi bi-eye-slash mt-0.5 text-lg text-terracotta" />
             <div>
               <p className="text-sm font-semibold text-warm-brown">Not visible to the public yet</p>
-              <p className="mt-1 text-sm text-warm-clay">
-                {business.name} won&apos;t appear in search, browse, or the homepage until it has at least
-                one approved photo, a placeholder image would misrepresent what you offer. Upload one
-                below and you&apos;ll go live as soon as it passes the quality check.
-              </p>
+              {business.type === "EXPERIENCE_HOST" ? (
+                <p className="mt-1 text-sm text-warm-clay">
+                  {business.name} won&apos;t appear in search, browse, or the homepage until you&apos;ve
+                  published an experience with at least one photo — that&apos;s how people discover an
+                  Experience Host, not a business-profile photo. Create one below and you&apos;ll go live
+                  right away.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-warm-clay">
+                  {business.name} won&apos;t appear in search, browse, or the homepage until it has at least
+                  one approved photo, a placeholder image would misrepresent what you offer. Upload one
+                  below and you&apos;ll go live as soon as it passes the quality check.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -357,6 +366,19 @@ export default function DashboardPage() {
 
 function hasApprovedPhoto(business: Business): boolean {
   return (business.media || []).some((m) => m.type === "PHOTO" && m.status === "APPROVED");
+}
+
+// Mirrors BusinessService.applyListingFilters' per-type discoverability
+// rule exactly (Val, Sep 2026: "they get discovered through their
+// events listing") — an Experience Host needs one experience with at
+// least one photo, not a business-level approved photo; Venue keeps
+// the one-photo bar; Made in Kenya's five-photo bar has its own
+// separate PENDING-approval banner elsewhere, so isn't duplicated here.
+function isDiscoverable(business: Business, hostingHistory: Experience[]): boolean {
+  if (business.type === "EXPERIENCE_HOST") {
+    return hostingHistory.some((e) => e.images && e.images.length > 0);
+  }
+  return hasApprovedPhoto(business);
 }
 
 // Directly editable business name at the top of the page, saving on
@@ -777,6 +799,7 @@ function ExperienceManager({
   const { showToast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const isEditingDraft = editingId ? experiences.find((e) => e.id === editingId)?.isDraft ?? false : false;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startsAt, setStartsAt] = useState("");
@@ -829,7 +852,7 @@ function ExperienceManager({
     setEditingId(exp.id);
     setTitle(exp.title);
     setDescription(exp.description || "");
-    setStartsAt(exp.startsAt.slice(0, 16));
+    setStartsAt(exp.startsAt ? exp.startsAt.slice(0, 16) : "");
     setEndsAt(exp.endsAt ? exp.endsAt.slice(0, 16) : "");
     setLocation(exp.location || "");
     setTicketingLink(exp.ticketingLink || "");
@@ -898,7 +921,16 @@ function ExperienceManager({
     try {
       if (editingId) {
         await api.experiences.update(editingId, dto);
-        showToast("Experience updated.");
+        // Editing a DRAFT through the normal "Publish"/submit button
+        // (rather than the dedicated Publish action in the list) still
+        // needs to actually flip isDraft — updating alone only patches
+        // the fields.
+        if (isEditingDraft) {
+          await api.experiences.publishDraft(businessId, editingId);
+          showToast("Experience published.");
+        } else {
+          showToast("Experience updated.");
+        }
       } else {
         await api.experiences.create(businessId, dto);
         showToast("Experience published.");
@@ -908,6 +940,40 @@ function ExperienceManager({
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save that experience.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Save as Draft — Val, Sep 2026. Deliberately skips every validation
+  // check above (cover image, end-after-start, budget ordering) since
+  // that's the entire point: nothing is required for a draft. Whatever
+  // fields ARE filled in get saved as-is.
+  const handleSaveDraft = async () => {
+    setBusy(true);
+    setError(null);
+    const dto = {
+      title: title || undefined,
+      description: description || undefined,
+      startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
+      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
+      location: location || undefined,
+      ticketingLink: ticketingLink || undefined,
+      price: price ? Number(price) : undefined,
+      images: coverImage ? [coverImage] : undefined,
+    };
+    try {
+      if (editingId) {
+        await api.experiences.update(editingId, dto);
+      } else {
+        await api.experiences.saveDraft(businessId, dto);
+      }
+      showToast("Draft saved.");
+      resetForm();
+      setShowForm(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save that draft.");
     } finally {
       setBusy(false);
     }
@@ -1056,9 +1122,25 @@ function ExperienceManager({
             )}
           </label>
           {error && <p className="text-sm text-error">{error}</p>}
-          <button disabled={busy || uploadingCover} className="w-full rounded-full bg-terracotta py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-            {busy ? "Saving…" : editingId ? "Save Experience" : "Publish Experience"}
-          </button>
+          <div className="flex gap-2">
+            {/* Save as Draft — always available, skips every check
+                above. Only shown for a new experience or an existing
+                draft; editing an already-published one has no draft
+                concept to fall back to (Val, Sep 2026). */}
+            {(!editingId || isEditingDraft) && (
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={busy || uploadingCover}
+                className="flex-1 rounded-full border border-terracotta py-2.5 text-sm font-semibold text-terracotta disabled:opacity-60"
+              >
+                {busy ? "Saving…" : "Save as Draft"}
+              </button>
+            )}
+            <button disabled={busy || uploadingCover} className="flex-1 rounded-full bg-terracotta py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+              {busy ? "Saving…" : editingId ? (isEditingDraft ? "Publish" : "Save Experience") : "Publish Experience"}
+            </button>
+          </div>
         </form>
       )}
 
@@ -1081,20 +1163,42 @@ function ExperienceManager({
                 )}
               </div>
               <div className="flex-1">
-                <div className="font-semibold">{exp.title}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{exp.title}</span>
+                  {exp.isDraft && (
+                    <span className="rounded-full bg-[rgba(199,101,58,0.1)] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-terracotta">Draft</span>
+                  )}
+                </div>
                 <div className="text-xs text-warm-clay">
-                  {new Date(exp.startsAt).toLocaleDateString()} · {exp.isExpired ? "Past" : "Upcoming"}
+                  {exp.startsAt ? new Date(exp.startsAt).toLocaleDateString() : "No date set"} · {exp.isDraft ? "Not published" : exp.isExpired ? "Past" : "Upcoming"}
                 </div>
               </div>
-              {!exp.isExpired && (
+              {exp.isDraft ? (
                 <div className="flex gap-1">
                   <button onClick={() => openEdit(exp)} className="p-1.5 text-warm-clay hover:text-terracotta" aria-label="Edit">
                     <i className="bi bi-pencil" />
+                  </button>
+                  <button
+                    onClick={() => api.experiences.publishDraft(businessId, exp.id).then(onChanged).catch((err) => showToast(err instanceof ApiError ? err.message : "Couldn't publish that yet."))}
+                    className="rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    Publish
                   </button>
                   <button onClick={() => handleDelete(exp.id)} className="p-1.5 text-error" aria-label="Delete">
                     <i className="bi bi-trash" />
                   </button>
                 </div>
+              ) : (
+                !exp.isExpired && (
+                  <div className="flex gap-1">
+                    <button onClick={() => openEdit(exp)} className="p-1.5 text-warm-clay hover:text-terracotta" aria-label="Edit">
+                      <i className="bi bi-pencil" />
+                    </button>
+                    <button onClick={() => handleDelete(exp.id)} className="p-1.5 text-error" aria-label="Delete">
+                      <i className="bi bi-trash" />
+                    </button>
+                  </div>
+                )
               )}
             </div>
           ))}

@@ -23,7 +23,7 @@ export function DashboardProducts({
 
   const load = () => {
     setLoading(true);
-    api.products.listForBusiness(businessId).then(setProducts).catch(() => {}).finally(() => setLoading(false));
+    api.products.listAllForOwner(businessId).then(setProducts).catch(() => {}).finally(() => setLoading(false));
   };
   useEffect(() => {
     if (approvalStatus === "APPROVED") load();
@@ -98,13 +98,37 @@ function ProductForm({
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [price, setPrice] = useState(initial ? String(initial.price) : "");
+  const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isDraft = initial?.isDraft ?? false;
 
-  const save = async () => {
+  // Editing an existing product (published or draft) always PATCHes it
+  // in place, no validation of its own — publishing (a separate action
+  // below) is what actually enforces name+price being present. Only a
+  // brand-new product needs to choose between "Save as Draft" (nothing
+  // required) and "Publish" (both required) up front.
+  const saveDraft = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const dto = { name: name.trim() || undefined, description: description.trim() || undefined, price: price ? Number(price) : undefined };
+      if (initial) {
+        await api.products.update(businessId, initial.id, dto);
+      } else {
+        await api.products.saveDraft(businessId, dto);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save that, try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const publish = async () => {
     if (!name.trim() || !price) {
-      setError("Name and price are required.");
+      setError("Name and price are required to publish.");
       return;
     }
     setBusy(true);
@@ -112,7 +136,11 @@ function ProductForm({
     try {
       const dto = { name: name.trim(), description: description.trim() || undefined, price: Number(price) };
       if (initial) {
+        // Update the fields first, then publish — a draft's publish
+        // endpoint validates what's already SAVED, not what's still in
+        // this form, so any edits made just now need to land first.
         await api.products.update(businessId, initial.id, dto);
+        await api.products.publishDraft(businessId, initial.id);
       } else {
         await api.products.create(businessId, dto);
       }
@@ -152,9 +180,18 @@ function ProductForm({
       {error && <p className="mb-3 text-sm text-error">{error}</p>}
       <div className="flex gap-2">
         <button onClick={onCancel} className="flex-1 rounded-full border border-border bg-surface py-2 text-sm font-semibold">Cancel</button>
-        <button onClick={save} disabled={busy} className="flex-1 rounded-full bg-terracotta py-2 text-sm font-semibold text-white disabled:opacity-60">
-          {busy ? "Saving…" : "Save"}
+        {/* Save as Draft: nothing required, never publishes. Publish:
+            both fields required, goes live (or leaves an already-
+            published product's existing state alone if nothing
+            changed). Val, Sep 2026. */}
+        <button onClick={saveDraft} disabled={busy} className="flex-1 rounded-full border border-terracotta py-2 text-sm font-semibold text-terracotta disabled:opacity-60">
+          {busy ? "Saving…" : isDraft || !initial ? "Save as Draft" : "Save"}
         </button>
+        {(isDraft || !initial) && (
+          <button onClick={publish} disabled={busy} className="flex-1 rounded-full bg-terracotta py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {busy ? "Publishing…" : "Publish"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -229,8 +266,13 @@ function ProductRow({
     <div className="rounded-2xl border border-border p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-warm-brown">{product.name}</p>
-          <p className="text-sm text-terracotta">{product.currency} {product.price.toLocaleString()}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-warm-brown">{product.name}</p>
+            {product.isDraft && (
+              <span className="rounded-full bg-[rgba(199,101,58,0.1)] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-terracotta">Draft</span>
+            )}
+          </div>
+          <p className="text-sm text-terracotta">{product.currency} {product.price != null ? product.price.toLocaleString() : "No price yet"}</p>
           {product.description && <p className="mt-1 text-sm text-warm-clay">{product.description}</p>}
         </div>
         <div className="flex shrink-0 gap-1.5">
