@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 import { api } from "@/lib/api";
+import { isIndexable } from "@/lib/seo";
+import { businessHref } from "@/lib/urls";
 
 const SITE_URL = "https://spotly.co.ke";
 
@@ -22,11 +24,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const businesses = await api.businesses.list();
-    const businessRoutes: MetadataRoute.Sitemap = businesses.map((b) => ({
-      url: `${SITE_URL}/businesses/${b.id}`,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    }));
+    // Section 10: never list a business that shouldn't be indexed —
+    // same bar as the page's own robots meta (isIndexable).
+    const businessRoutes: MetadataRoute.Sitemap = businesses
+      .filter(isIndexable)
+      .map((b) => ({
+        // The real canonical URL now (Val, Sep 2026 SEO spec, Section
+        // 1) — the sitemap should never list the old /businesses/{id}
+        // redirect as if it were the actual destination.
+        url: `${SITE_URL}${businessHref(b)}`,
+        changeFrequency: "weekly",
+        priority: 0.8,
+      }));
     return [...staticRoutes, ...businessRoutes];
   } catch {
     // A failed API call shouldn't take the whole sitemap down — worse

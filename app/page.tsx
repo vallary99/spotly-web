@@ -6,6 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { SectionHeader } from "@/components/SectionHeader";
 import { BusinessCard } from "@/components/BusinessCard";
+import { businessHref } from "@/lib/urls";
 import { BusinessCardRowSkeleton } from "@/components/Skeleton";
 import { ExperienceCard } from "@/components/ExperienceCard";
 import { OfferCard } from "@/components/OfferCard";
@@ -308,7 +309,7 @@ export default function HomePage() {
                 {heroResults.businesses.map((b) => (
                   <Link
                     key={b.id}
-                    href={`/businesses/${b.id}`}
+                    href={businessHref(b)}
                     className="flex items-center gap-2.5 px-4 py-3 text-sm text-text hover:bg-cream"
                   >
                     <i className="bi bi-shop text-warm-clay" />

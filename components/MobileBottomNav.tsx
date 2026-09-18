@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
 import { BottomSheet } from "./BottomSheet";
+import { businessHref } from "@/lib/urls";
 import { api, ApiError } from "@/lib/api";
 
 // Mobile's primary navigation, replacing the top navbar's icon row and
@@ -145,7 +146,7 @@ export function MobileBottomNav() {
             {results.businesses.map((b) => (
               <Link
                 key={b.id}
-                href={`/businesses/${b.id}`}
+                href={businessHref(b)}
                 onClick={() => setSearchOpen(false)}
                 className="flex items-center gap-2.5 rounded-xl px-3 py-3 text-sm hover:bg-cream"
               >

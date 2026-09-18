@@ -107,6 +107,7 @@ export interface Business {
   approvalStatus?: "APPROVED" | "PENDING" | "REJECTED";
   madeInKenyaCategory?: "FASHION" | "BEAUTY" | "ART_CRAFTS" | "JEWELLERY_ACCESSORIES" | "GIFTS_LIFESTYLE" | null;
   name: string;
+  slug?: string | null;
   // Replaced by `categories` (up to 5) — kept nowhere else, every
   // consumer reads the array now.
   categories: string[];
@@ -210,6 +211,8 @@ export interface Experience {
   id: string;
   businessId: string;
   businessName?: string;
+  businessSlug?: string | null;
+  businessCity?: string | null;
   title: string;
   description?: string | null;
   images: string[];
@@ -327,6 +330,7 @@ export const api = {
     // token here unconditionally meant the owner's own dashboard always
     // got the guest-level (approved-only) view of their own business.
     get: (id: string) => request<Business>(`/businesses/${id}`),
+    getBySlug: (city: string, slug: string) => request<Business>(`/businesses/lookup/${encodeURIComponent(city)}/${slug}`),
     // Fire-and-forget from the caller's side too — a failed share-count
     // ping shouldn't ever block or error out the actual share action
     // itself (Val, Sep 2026: "add shares on that row").

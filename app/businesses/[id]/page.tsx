@@ -1,131 +1,31 @@
-import type { Metadata } from "next";
+import { permanentRedirect, notFound } from "next/navigation";
 import { api } from "@/lib/api";
-import { resolveBusinessPhotoUrl } from "@/lib/placeholders";
-import BusinessDetailClient from "./BusinessDetailClient";
+import { businessHref } from "@/lib/urls";
 
-// This file exists purely so each business gets its own title,
-// description, and share-preview image — the actual interactive page
-// is BusinessDetailClient.tsx, a client component (state, effects,
-// event handlers throughout), and Next.js only allows a `metadata` /
-// generateMetadata export from a server component. Splitting the two
-// apart is what makes "unique per-business SEO + WhatsApp/social link
-// previews" possible at all here (Val, Sep 2026: search results/shares
-// were all showing the same generic Spotly title regardless of which
-// business the link was actually for).
-export async function generateMetadata({
+// Val, Sep 2026: "set the old links as permanent redirects." The
+// canonical business URL is now /{city}/{slug} (see [city]/[slug]/
+// page.tsx) — this route's only job now is resolving an old
+// /businesses/{id} link (still out there in bookmarks, past shares,
+// and anything Google already indexed) to the new URL via a real
+// permanent redirect (308), not a client-side bounce or a broken link.
+// A ?product= query param, if present, carries through unchanged.
+export default async function LegacyBusinessRedirect({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ product?: string }>;
-}): Promise<Metadata> {
+}) {
   const { id } = await params;
-  const { product: productId } = await searchParams;
+  const { product } = await searchParams;
 
-  // A shared product link (?product=) — no dedicated product page
-  // exists (Val, Sep 2026: "Is there a way to share a product without
-  // having a dedicated page for it?"), so the share preview for THIS
-  // specific link uses the product's own photo/name/price instead of
-  // the business's generic info, even though the underlying page is
-  // the same one either way.
-  if (productId) {
-    try {
-      const product = await api.products.getOne(productId);
-      const description = product.description?.slice(0, 155) || `${product.name} — ${product.currency} ${product.price} on Spotly.`;
-      const photo = product.images[0]?.url;
-      return {
-        title: product.name,
-        description,
-        alternates: { canonical: `/businesses/${id}?product=${productId}` },
-        openGraph: {
-          title: product.name,
-          description,
-          url: `/businesses/${id}?product=${productId}`,
-          type: "website",
-          images: photo ? [{ url: photo }] : undefined,
-        },
-        twitter: {
-          card: "summary_large_image",
-          title: product.name,
-          description,
-          images: photo ? [photo] : undefined,
-        },
-      };
-    } catch {
-      // Falls through to the ordinary business metadata below — a
-      // dead/removed product link shouldn't break the page's metadata
-      // entirely, just fall back to describing the business itself.
-    }
-  }
-
+  let business;
   try {
-    const business = await api.businesses.get(id);
-    const photo = resolveBusinessPhotoUrl(business.media);
-    const description =
-      business.description?.slice(0, 155) ||
-      `${business.name} on Spotly — ${business.neighborhood || "Nairobi"}. Discover it, save it, come back to it.`;
-    return {
-      title: business.name,
-      description,
-      alternates: { canonical: `/businesses/${id}` },
-      openGraph: {
-        title: business.name,
-        description,
-        url: `/businesses/${id}`,
-        type: "website",
-        images: photo ? [{ url: photo }] : undefined,
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: business.name,
-        description,
-        images: photo ? [photo] : undefined,
-      },
-    };
+    business = await api.businesses.get(id);
   } catch {
-    // A missing/unreachable business shouldn't crash metadata
-    // generation — falls back to the root layout's generic metadata,
-    // same as any other page that doesn't override it.
-    return {};
-  }
-}
-
-export default async function BusinessDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
-  // Same reasoning as the root layout's WebSite structured data — gives
-  // search engines explicit facts about this specific business rather
-  // than relying on inference. Best-effort: a fetch failure here just
-  // means no structured data for this one request, not a broken page —
-  // BusinessDetailClient does its own fetching/error handling for the
-  // actual visible content regardless.
-  let jsonLd: Record<string, unknown> | null = null;
-  try {
-    const business = await api.businesses.get(id);
-    const photo = resolveBusinessPhotoUrl(business.media);
-    jsonLd = {
-      "@context": "https://schema.org",
-      "@type": "LocalBusiness",
-      name: business.name,
-      description: business.description || undefined,
-      image: photo || undefined,
-      address: business.address
-        ? { "@type": "PostalAddress", streetAddress: business.address, addressLocality: business.neighborhood || "Nairobi", addressCountry: "KE" }
-        : undefined,
-      telephone: business.callPhone || undefined,
-      url: `https://spotly.co.ke/businesses/${id}`,
-      ...(business.latitude != null && business.longitude != null
-        ? { geo: { "@type": "GeoCoordinates", latitude: business.latitude, longitude: business.longitude } }
-        : {}),
-    };
-  } catch {
-    jsonLd = null;
+    notFound();
   }
 
-  return (
-    <>
-      {jsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />}
-      <BusinessDetailClient id={id} />
-    </>
-  );
+  const target = businessHref(business) + (product ? `?product=${product}` : "");
+  permanentRedirect(target);
 }

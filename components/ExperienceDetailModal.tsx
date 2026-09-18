@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import type { Experience } from "@/lib/api";
+import { businessHref } from "@/lib/urls";
 
 const PAYMENT_TIMING_LABEL: Record<string, string> = {
   ADVANCE: "Pay in advance",
@@ -64,7 +65,7 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
         <div className="p-6">
           <h2 className="mb-1 text-2xl text-warm-brown">{experience.title}</h2>
           {experience.businessName && (
-            <Link href={`/businesses/${experience.businessId}`} onClick={onClose} className="mb-4 inline-flex items-center gap-1.5 text-sm text-terracotta hover:underline">
+            <Link href={businessHref({ id: experience.businessId, slug: experience.businessSlug, city: experience.businessCity })} onClick={onClose} className="mb-4 inline-flex items-center gap-1.5 text-sm text-terracotta hover:underline">
               <i className="bi bi-shop" />
               Hosted by {experience.businessName}
             </Link>

@@ -12,9 +12,11 @@ import { useToast } from "./ToastContext";
 // auto-open the right product here.
 export function CatalogueSection({
   businessId,
+  businessPath,
   autoOpenProductId,
 }: {
   businessId: string;
+  businessPath: string;
   autoOpenProductId?: string | null;
 }) {
   const [products, setProducts] = useState<Product[]>([]);
@@ -61,6 +63,7 @@ export function CatalogueSection({
       {viewing && (
         <ProductViewer
           businessId={businessId}
+          businessPath={businessPath}
           product={viewing}
           onClose={() => setViewing(null)}
         />
@@ -71,10 +74,12 @@ export function CatalogueSection({
 
 function ProductViewer({
   businessId,
+  businessPath,
   product,
   onClose,
 }: {
   businessId: string;
+  businessPath: string;
   product: Product;
   onClose: () => void;
 }) {
@@ -110,7 +115,7 @@ function ProductViewer({
   const handleShare = async () => {
     // The deep link — same page, ?product= tells BusinessDetailClient
     // to open the Catalogue tab and this exact product on load.
-    const url = `${window.location.origin}/businesses/${businessId}?product=${product.id}`;
+    const url = `${window.location.origin}${businessPath}?product=${product.id}`;
     api.businesses.recordShare(businessId);
     if (navigator.share) {
       navigator.share({ title: product.name, url }).catch(() => {});

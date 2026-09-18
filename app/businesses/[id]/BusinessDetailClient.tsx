@@ -14,6 +14,7 @@ import { ReviewModal } from "@/components/ReviewModal";
 import { useAuth } from "@/components/AuthContext";
 import { useToast } from "@/components/ToastContext";
 import { api, ApiError, type Business, type Experience, type Offer, type ReviewSummary } from "@/lib/api";
+import { businessHref } from "@/lib/urls";
 import { isAllowedImageUrl } from "@/lib/placeholders";
 import { amenityIcon } from "@/lib/amenityIcons";
 import { computeOpenStatus, DAYS } from "@/lib/hours";
@@ -27,16 +28,27 @@ import { BusinessDetailSkeleton } from "@/components/Skeleton";
 // there) into its own client component. `id` arrives as a plain string
 // now rather than the Promise<{id}> the page-level params prop is —
 // the server component already resolved that.
-export default function BusinessDetailClient({ id }: { id: string }) {
+export default function BusinessDetailClient({ id, initialBusiness }: { id: string; initialBusiness?: Business | null }) {
   const { authed, user, openAuthModal } = useAuth();
   const { showToast } = useToast();
 
-  const [business, setBusiness] = useState<Business | null>(null);
+  // Seeded from the server component's own fetch (page.tsx already
+  // fetches this business for JSON-LD, so this reuses that same call
+  // rather than adding a second one) so the actual business content —
+  // name, description, hours, amenities, photos — is present in the
+  // server-rendered HTML on first load, not only after this
+  // component's own effect below finishes on the client (Val, Sep
+  // 2026's SEO spec, Section 2: "must not depend entirely on
+  // client-side rendering for their primary SEO content"). The effect
+  // below still runs as before for freshness and the rest of the
+  // page's data (reviews, related, offers, hosting history) — this
+  // only changes what the very first render shows.
+  const [business, setBusiness] = useState<Business | null>(initialBusiness ?? null);
   const [experienceHistory, setExperienceHistory] = useState<Experience[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
   const [related, setRelated] = useState<Business[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialBusiness);
   const { isSaved, toggleSave } = useBookmarks();
   const saved = business ? isSaved({ businessId: business.id }) : false;
   const [saveBusy, setSaveBusy] = useState(false);
@@ -59,7 +71,11 @@ export default function BusinessDetailClient({ id }: { id: string }) {
   const loadReviews = () => api.reviews.forBusiness(id).then(setReviews);
 
   useEffect(() => {
-    setLoading(true);
+    // Don't flash the loading state back on when we already have real
+    // content to show from initialBusiness — this effect still runs
+    // (for freshness, and to fetch the rest of the page's data), it
+    // just shouldn't visually reset the page to "loading" first.
+    if (!initialBusiness) setLoading(true);
     api
       .businesses.get(id)
       .then((b) => {
@@ -357,7 +373,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
                     <h2 className="mb-3.5 text-xl text-warm-brown">Upcoming Experiences</h2>
                     <div className="h-scroll flex gap-4 overflow-x-auto">
                       {upcomingExperiences.map((e) => (
-                        <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name }} />
+                        <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} />
                       ))}
                     </div>
                   </div>
@@ -610,7 +626,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
             </div>
             <div className="px-11 pt-6 max-md:px-4">
               {activeTab === "catalogue" && (
-                <CatalogueSection businessId={business.id} autoOpenProductId={deepLinkedProductId} />
+                <CatalogueSection businessId={business.id} businessPath={businessHref(business)} autoOpenProductId={deepLinkedProductId} />
               )}
               {/* Just cards, no header/wrapper card the way it had one
                   nested inside the About tab — this IS the tab now, so
@@ -619,7 +635,7 @@ export default function BusinessDetailClient({ id }: { id: string }) {
               {activeTab === "past-events" && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                   {pastExperiences.map((e) => (
-                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name }} />
+                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} />
                   ))}
                 </div>
               )}

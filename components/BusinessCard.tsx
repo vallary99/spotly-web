@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ApiError, type Business } from "@/lib/api";
 import { resolveBusinessPhotoUrl } from "@/lib/placeholders";
 import { computeOpenStatus } from "@/lib/hours";
+import { businessHref } from "@/lib/urls";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
 import { useBookmarks } from "./BookmarksContext";
@@ -61,7 +62,7 @@ export function BusinessCard({ business }: { business: Business }) {
 
   return (
     <Link
-      href={`/businesses/${business.id}`}
+      href={businessHref(business)}
       className="group block w-[268px] shrink-0 overflow-hidden rounded-spotly border border-border bg-surface transition hover:-translate-y-1 hover:shadow-[0_16px_30px_rgba(67,53,47,0.14)]"
     >
       <div className="relative h-[170px] overflow-hidden bg-cream">
