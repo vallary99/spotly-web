@@ -107,7 +107,7 @@ export function LocationPicker({
         className="mb-2 flex items-center gap-2 rounded-full border border-terracotta bg-[rgba(199,101,58,0.08)] px-4 py-2 text-sm font-semibold text-terracotta transition hover:bg-[rgba(199,101,58,0.14)] disabled:opacity-60"
       >
         <i className={`bi ${locating ? "bi-arrow-repeat" : "bi-geo-alt-fill"}`} />
-        {locating ? "Finding you…" : "I'm at my business right now — use my location"}
+        {locating ? "Finding you…" : "I'm at my business right now, use my location"}
       </button>
       {locateError && <p className="mb-2 text-xs text-error">{locateError}</p>}
 

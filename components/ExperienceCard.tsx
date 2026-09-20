@@ -21,13 +21,16 @@ import { ExperienceDetailModal } from "./ExperienceDetailModal";
 // detail popup a live event gets. This is what "Past Events" sections
 // use directly; the same component, just automatically inert once its
 // own date has passed.
-export function ExperienceCard({ experience }: { experience: Experience }) {
+export function ExperienceCard({ experience, autoOpen }: { experience: Experience; autoOpen?: boolean }) {
   const { authed, openAuthModal } = useAuth();
   const { showToast } = useToast();
   const { isSaved, toggleSave } = useBookmarks();
   const saved = isSaved({ experienceId: experience.id });
   const [busy, setBusy] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
+  // Val, Sep 2026: "events should be sharable" — a shared link opens
+  // this exact card's detail modal automatically, same pattern as the
+  // Catalogue tab's ?product= deep link.
+  const [detailOpen, setDetailOpen] = useState(autoOpen ?? false);
   const [imgErrored, setImgErrored] = useState(false);
   const date = experience.startsAt ? new Date(experience.startsAt) : null;
   const dateLabel = date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";

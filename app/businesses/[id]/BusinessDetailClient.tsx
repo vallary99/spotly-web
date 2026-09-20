@@ -67,6 +67,9 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
   // once its own product list has loaded.
   const searchParams = useSearchParams();
   const deepLinkedProductId = searchParams.get("product");
+  // Val, Sep 2026: "events should be sharable" — same ?param pattern,
+  // read once here and passed to the matching card as autoOpen.
+  const deepLinkedExperienceId = searchParams.get("experience");
 
   const loadReviews = () => api.reviews.forBusiness(id).then(setReviews);
 
@@ -129,7 +132,20 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
   }
 
   const openStatus = computeOpenStatus(business.hours);
-  const isOwnBusiness = authed && user?.id === business.ownerId;
+  // AuthContext reads localStorage synchronously (a lazy useState
+  // initializer, deliberately, so a child effect checking `authed`
+  // never wrongly fires before the real value is known) — but that
+  // means an already-logged-in owner's very first client render
+  // already has real auth data, while the server (no localStorage)
+  // rendered the logged-out default. Gating on `mounted` (false until
+  // a useEffect flips it, which only ever runs on the client after
+  // hydration) makes the first client render match the server exactly
+  // — the personalized "this is your business" badge only appears
+  // once React has already reconciled, never during the render that
+  // has to match the server's HTML.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isOwnBusiness = mounted && authed && user?.id === business.ownerId;
   const approvedPhotos = (business.media || []).filter(
     (m) => m.type === "PHOTO" && m.status === "APPROVED" && isAllowedImageUrl(m.url),
   );
@@ -373,7 +389,7 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
                     <h2 className="mb-3.5 text-xl text-warm-brown">Upcoming Experiences</h2>
                     <div className="h-scroll flex gap-4 overflow-x-auto">
                       {upcomingExperiences.map((e) => (
-                        <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} />
+                        <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} autoOpen={e.id === deepLinkedExperienceId} />
                       ))}
                     </div>
                   </div>
@@ -635,7 +651,7 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
               {activeTab === "past-events" && (
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                   {pastExperiences.map((e) => (
-                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} />
+                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} autoOpen={e.id === deepLinkedExperienceId} />
                   ))}
                 </div>
               )}

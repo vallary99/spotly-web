@@ -60,7 +60,7 @@ function VerifyEmailContent() {
           <>
             <i className="bi bi-check-circle-fill mb-3 block text-4xl text-success" />
             <h1 className="mb-1.5 text-2xl text-warm-brown">Email verified</h1>
-            <p className="mb-6 text-sm text-warm-clay">Thanks for confirming — you're all set and signed in.</p>
+            <p className="mb-6 text-sm text-warm-clay">Thanks for confirming. You're all set and signed in.</p>
             <button
               onClick={() => router.push(nextHref)}
               className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-white"

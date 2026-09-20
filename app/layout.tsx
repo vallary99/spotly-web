@@ -37,14 +37,14 @@ export const metadata: Metadata = {
     locale: "en_KE",
     siteName: "Spotly",
     url: SITE_URL,
-    title: "Spotly — Find It. Book It. Spotly.",
+    title: "Spotly - Find It. Book It. Spotly.",
     description:
       "Discover Nairobi's best businesses, hidden gems and experiences, browsed and saved and returned to.",
     images: [{ url: "/spotly-logo.png" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Spotly — Find It. Book It. Spotly.",
+    title: "Spotly - Find It. Book It. Spotly.",
     description:
       "Discover Nairobi's best businesses, hidden gems and experiences, browsed and saved and returned to.",
     images: ["/spotly-logo.png"],

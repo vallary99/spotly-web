@@ -26,7 +26,7 @@ export async function generateMetadata({
   if (productId) {
     try {
       const product = await api.products.getOne(productId);
-      const description = product.description?.slice(0, 155) || `${product.name} — ${product.currency} ${product.price} on Spotly.`;
+      const description = product.description?.slice(0, 155) || `${product.name}, ${product.currency} ${product.price} on Spotly.`;
       const photo = product.images[0]?.url;
       return {
         title: product.name,
@@ -51,7 +51,7 @@ export async function generateMetadata({
     const photo = resolveBusinessPhotoUrl(business.media);
     const description =
       business.description?.slice(0, 155) ||
-      `${business.name} on Spotly — ${business.neighborhood || "Nairobi"}. Discover it, save it, come back to it.`;
+      `${business.name} on Spotly, ${business.neighborhood || "Nairobi"}. Discover it, save it, come back to it.`;
     return {
       title: business.name,
       description,

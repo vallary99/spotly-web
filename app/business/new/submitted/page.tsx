@@ -18,7 +18,7 @@ export default function ApplicationSubmittedPage() {
         <h1 className="mb-2 text-2xl text-warm-brown">Application submitted</h1>
         <p className="mb-8 text-sm text-warm-clay">
           Thanks for applying to Spotly&apos;s Made in Kenya collection. We&apos;re reviewing your application and
-          will email you once it&apos;s approved — you&apos;ll then be able to add photos and start posting your
+          will email you once it&apos;s approved. You&apos;ll then be able to add photos and start posting your
           products.
         </p>
         <Link href="/" className="rounded-full bg-terracotta px-6 py-2.5 text-sm font-semibold text-white">

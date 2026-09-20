@@ -68,7 +68,7 @@ export function OfferManager({ businessId }: { businessId: string }) {
       {loading && <p className="py-6 text-center text-warm-clay">Loading…</p>}
       {!loading && offers.length === 0 && !showForm && (
         <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-warm-clay">
-          No offers yet — add one to give people a reason to visit today.
+          No offers yet. Add one to give people a reason to visit today.
         </div>
       )}
 

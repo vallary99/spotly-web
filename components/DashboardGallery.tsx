@@ -114,7 +114,7 @@ export function DashboardGallery({
       onChanged();
     }
     if (capHit) {
-      setError(`Reached your ${tier} tier's limit of ${photoLimit} photos — ${files.length - succeeded} skipped.`);
+      setError(`Reached your ${tier} tier's limit of ${photoLimit} photos. ${files.length - succeeded} skipped.`);
     } else if (lastError) {
       setError(lastError);
     }
@@ -177,7 +177,7 @@ export function DashboardGallery({
       onChanged();
     }
     if (capHit) {
-      setError(`Reached your ${tier} tier's limit of ${videoLimit} videos — ${files.length - succeeded} skipped.`);
+      setError(`Reached your ${tier} tier's limit of ${videoLimit} videos. ${files.length - succeeded} skipped.`);
     } else if (lastError) {
       setError(lastError);
     }
@@ -238,7 +238,7 @@ export function DashboardGallery({
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-warm-clay">
-          No photos or videos yet — add some so your business can be discovered.
+          No photos or videos yet. Add some so your business can be discovered.
         </div>
       ) : (
         // Denser than the public gallery on purpose (more columns, tighter

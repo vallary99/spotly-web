@@ -43,7 +43,7 @@ export function VerificationBanner() {
     setBusy(true);
     try {
       await api.auth.resendVerification(user.email);
-      showToast("Verification email sent — check your inbox.");
+      showToast("Verification email sent. Check your inbox.");
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Couldn't send that, try again.");
     } finally {

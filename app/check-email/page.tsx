@@ -102,11 +102,11 @@ function CheckEmailContent() {
               disabled={resendBusy}
               className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {resendBusy ? "Sending…" : resendSent ? "Sent — check your inbox" : "Resend verification email"}
+              {resendBusy ? "Sending…" : resendSent ? "Sent, check your inbox" : "Resend verification email"}
             </button>
           </>
         ) : (
-          <p className="text-xs text-warm-clay">Didn't get it? Check your spam folder, or come back here later — this page will offer to resend it once the link expires.</p>
+          <p className="text-xs text-warm-clay">Didn't get it? Check your spam folder, or come back here later. This page will offer to resend it once the link expires.</p>
         )}
       </div>
     </div>

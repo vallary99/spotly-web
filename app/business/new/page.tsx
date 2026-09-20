@@ -45,6 +45,7 @@ const RESERVATION_POLICY_OPTIONS = [
 ];
 
 const MAX_CATEGORIES_FALLBACK = 5;
+const COLLAPSED_CATEGORY_COUNT = 12;
 
 const MADE_IN_KENYA_CATEGORIES = [
   { value: "FASHION", label: "Fashion", hint: "Clothing, shoes, bags and similar" },
@@ -72,6 +73,10 @@ export default function NewBusinessPage() {
   const [name, setName] = useState("");
   const [categories, setCategories] = useState<string[]>(FALLBACK_CATEGORIES);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  // Val, Sep 2026: "categories should be collapsible" — the full list
+  // runs to 50+ entries, a lot to scroll through for something most
+  // people only need to glance at a handful of.
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const [description, setDescription] = useState("");
   const [callPhone, setCallPhone] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
@@ -103,7 +108,7 @@ export default function NewBusinessPage() {
         // and a successful-but-silent one looked identical, which made
         // this exact class of bug hard to tell apart from "working as
         // intended, just no match" (Val, Sep 2026).
-        showToast("Couldn't find that address on the map — drag the pin or use your current location instead.");
+        showToast("Couldn't find that address on the map. Drag the pin or use your current location instead.");
       }
     } finally {
       setGeocoding(false);
@@ -226,7 +231,7 @@ export default function NewBusinessPage() {
         // Not live yet — no "is live" toast, no dashboard redirect with
         // upload prompts that don't apply until approved (Val, Sep
         // 2026: approval happens before anything else can happen).
-        showToast("Application submitted — we'll email you once it's reviewed.");
+        showToast("Application submitted. We'll email you once it's reviewed.");
         router.push("/business/new/submitted");
       } else {
         showToast(`${name} is live on Spotly!`);
@@ -258,13 +263,13 @@ export default function NewBusinessPage() {
           <h1 className="mb-2 text-2xl text-warm-brown">Verify your email first</h1>
           <p className="mb-6 text-sm text-warm-clay">
             We sent a verification link to <strong>{user.email}</strong> when you signed up. Confirm it before
-            listing a business — check your inbox (and spam folder).
+            listing a business. Check your inbox (and spam folder).
           </p>
           <button
             onClick={async () => {
               try {
                 await api.auth.resendVerification(user.email);
-                showToast("Verification email sent — check your inbox.");
+                showToast("Verification email sent. Check your inbox.");
               } catch (err) {
                 showToast(err instanceof ApiError ? err.message : "Couldn't send that, try again.");
               }
@@ -455,11 +460,18 @@ export default function NewBusinessPage() {
             <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="Jiko Kilimani" />
           </Field>
 
-          {/* Categories - Multi-select */}
+          {/* Categories - Multi-select, collapsible (Val, Sep 2026) —
+              collapsed by default to a handful, expanding to the full
+              list on request. Anything already selected always stays
+              visible even while collapsed, so picking a category
+              buried further down the list never makes it disappear. */}
           <div>
             <span className="mb-2 block text-sm font-semibold text-warm-brown">Categories ({selectedCategories.length}/{maxCategories})</span>
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
+              {(categoriesExpanded
+                ? categories
+                : Array.from(new Set([...selectedCategories, ...categories.slice(0, COLLAPSED_CATEGORY_COUNT)]))
+              ).map((cat) => (
                 <button
                   type="button"
                   key={cat}
@@ -475,6 +487,15 @@ export default function NewBusinessPage() {
                 </button>
               ))}
             </div>
+            {categories.length > COLLAPSED_CATEGORY_COUNT && (
+              <button
+                type="button"
+                onClick={() => setCategoriesExpanded((v) => !v)}
+                className="mt-2 text-sm font-semibold text-terracotta"
+              >
+                {categoriesExpanded ? "Show fewer categories" : `Show all categories (${categories.length})`}
+              </button>
+            )}
             {selectedCategories.length === 0 && <p className="mt-1 text-xs text-error">Please select at least one category</p>}
           </div>
 

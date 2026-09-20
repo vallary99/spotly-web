@@ -64,7 +64,7 @@ export function DashboardProducts({
       {loading && <p className="py-8 text-center text-warm-clay">Loading…</p>}
       {!loading && products.length === 0 && !creating && (
         <div className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-warm-clay">
-          No products yet — add your first one so people can discover your catalogue.
+          No products yet. Add your first one so people can discover your catalogue.
         </div>
       )}
 

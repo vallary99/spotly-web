@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import type { Experience } from "@/lib/api";
+import { api, type Experience } from "@/lib/api";
 import { businessHref } from "@/lib/urls";
+import { useToast } from "./ToastContext";
 
 const PAYMENT_TIMING_LABEL: Record<string, string> = {
   ADVANCE: "Pay in advance",
@@ -13,10 +14,27 @@ const PAYMENT_TIMING_LABEL: Record<string, string> = {
 };
 
 export function ExperienceDetailModal({ experience, onClose }: { experience: Experience; onClose: () => void }) {
+  const { showToast } = useToast();
   const [imgErrored, setImgErrored] = useState(false);
   const instructionsRef = useRef<HTMLDivElement>(null);
   const startDate = experience.startsAt ? new Date(experience.startsAt) : new Date();
   const endDate = experience.endsAt ? new Date(experience.endsAt) : null;
+
+  // Val, Sep 2026: "events should be sharable." No dedicated experience
+  // page exists, same reasoning as products — the link deep-links back
+  // into the hosting business's own page, with ?experience= telling
+  // BusinessDetailClient/ExperienceCard to auto-open this exact one.
+  const handleShare = async () => {
+    const path = businessHref({ id: experience.businessId, slug: experience.businessSlug, city: experience.businessCity });
+    const url = `${window.location.origin}${path}?experience=${experience.id}`;
+    api.businesses.recordShare(experience.businessId);
+    if (navigator.share) {
+      navigator.share({ title: experience.title, url }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied to clipboard.");
+    }
+  };
   const dateOptions: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric" };
   const timeOptions: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
   // Same "blank panel, never a broken-image icon or stock placeholder"
@@ -63,7 +81,12 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
         </div>
 
         <div className="p-6">
-          <h2 className="mb-1 text-2xl text-warm-brown">{experience.title}</h2>
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <h2 className="text-2xl text-warm-brown">{experience.title}</h2>
+            <button onClick={handleShare} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border" aria-label="Share">
+              <i className="bi bi-share" />
+            </button>
+          </div>
           {experience.businessName && (
             <Link href={businessHref({ id: experience.businessId, slug: experience.businessSlug, city: experience.businessCity })} onClick={onClose} className="mb-4 inline-flex items-center gap-1.5 text-sm text-terracotta hover:underline">
               <i className="bi bi-shop" />

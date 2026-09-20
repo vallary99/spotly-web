@@ -190,7 +190,7 @@ export default function DashboardPage() {
               {business.type === "EXPERIENCE_HOST" ? (
                 <p className="mt-1 text-sm text-warm-clay">
                   {business.name} won&apos;t appear in search, browse, or the homepage until you&apos;ve
-                  published an experience with at least one photo — that&apos;s how people discover an
+                  published your first experience. That&apos;s how people discover an
                   Experience Host, not a business-profile photo. Create one below and you&apos;ll go live
                   right away.
                 </p>
@@ -456,6 +456,7 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
   const [categories, setCategories] = useState<string[]>([]);
   const [maxCategories, setMaxCategories] = useState(MAX_CATEGORIES_FALLBACK);
   const [selectedCategories, setSelectedCategories] = useState<string[]>(business.categories || []);
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const [amenities, setAmenities] = useState<string[]>(business.amenities || []);
   const [description, setDescription] = useState(business.description || "");
   const [callPhone, setCallPhone] = useState(business.callPhone || "");
@@ -479,7 +480,7 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
         setLatitude(result.latitude);
         setLongitude(result.longitude);
       } else if (address.trim()) {
-        showToast("Couldn't find that address on the map — drag the pin or use your current location instead.");
+        showToast("Couldn't find that address on the map. Drag the pin or use your current location instead.");
       }
     } finally {
       setGeocoding(false);
@@ -583,11 +584,15 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
         </label>
       </div>
 
-      {/* Categories - Multi-select */}
+      {/* Categories - Multi-select, collapsible (Val, Sep 2026) — same
+          treatment as the onboarding form's own category picker. */}
       <div className="mb-4">
         <span className="mb-2 block text-xs font-semibold text-warm-clay">Categories ({selectedCategories.length}/{maxCategories})</span>
         <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
+          {(categoriesExpanded
+            ? categories
+            : Array.from(new Set([...selectedCategories, ...categories.slice(0, 12)]))
+          ).map((cat) => (
             <button
               type="button"
               key={cat}
@@ -603,6 +608,11 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
             </button>
           ))}
         </div>
+        {categories.length > 12 && (
+          <button type="button" onClick={() => setCategoriesExpanded((v) => !v)} className="mt-2 text-sm font-semibold text-terracotta">
+            {categoriesExpanded ? "Show fewer categories" : `Show all categories (${categories.length})`}
+          </button>
+        )}
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1155,7 +1165,7 @@ function ExperienceManager({
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               rows={3}
-              placeholder="Anything attendees should know — what to bring, parking, dress code..."
+              placeholder="Anything attendees should know, what to bring, parking, dress code..."
               className={inputClass}
             />
           </label>
@@ -1207,7 +1217,7 @@ function ExperienceManager({
             {hasBusinessBudget ? (
               <>Use business&apos;s default budget ({businessBudgetLabel}) instead of setting one just for this experience</>
             ) : (
-              <>Use business&apos;s default budget (not set — add one on your profile to inherit it here)</>
+              <>Use business&apos;s default budget (not set, add one on your profile to inherit it here)</>
             )}
           </label>
           {error && <p className="text-sm text-error">{error}</p>}
@@ -1547,7 +1557,7 @@ function SubscriptionPanel({
           {showCountdown && (
             <p className="mt-3 border-t border-border pt-3 text-xs font-semibold text-terracotta">
               <i className="bi bi-clock-history mr-1" />
-              {daysLeft} day{daysLeft === 1 ? "" : "s"} left —{" "}
+              {daysLeft} day{daysLeft === 1 ? "" : "s"} left,{" "}
               {isTrialing
                 ? "reverts to Free automatically unless you upgrade for real before then."
                 : "renew now or this plan reverts to Free automatically."}
@@ -1690,7 +1700,7 @@ function SubscriptionPanel({
 
       {pendingFirstCohortOffer && (
         <p className="text-xs text-warm-clay">
-          As one of our first 100 businesses, your only option right now is the free Premium trial above — paid
+          As one of our first 100 businesses, your only option right now is the free Premium trial above. Paid
           upgrades open back up once you've activated or skipped it.
         </p>
       )}
