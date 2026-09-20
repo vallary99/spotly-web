@@ -458,6 +458,10 @@ const MAX_CATEGORIES_FALLBACK = 5;
 
 function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () => void }) {
   const { showToast } = useToast();
+  // Val, Sep 2026: "there is however no way of editing that [type]."
+  // Only Venue <-> Experience Host — Made in Kenya keeps its own
+  // separate, approval-gated creation flow and isn't offered here.
+  const [type, setType] = useState<"VENUE" | "EXPERIENCE_HOST">(business.type as "VENUE" | "EXPERIENCE_HOST");
   const [name, setName] = useState(business.name);
   const [categories, setCategories] = useState<string[]>([]);
   const [maxCategories, setMaxCategories] = useState(MAX_CATEGORIES_FALLBACK);
@@ -546,6 +550,7 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
     setBusy(true);
     try {
       await api.businesses.update(business.id, {
+        type,
         name,
         categories: selectedCategories,
         description,
@@ -574,20 +579,60 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
   return (
     <div className="rounded-spotly border border-border bg-surface p-6">
       <h2 className="mb-4 text-xl text-warm-brown">Business Profile</h2>
+
+      {/* Val, Sep 2026: "there is however no way of editing that
+          [type]." Made in Kenya isn't offered here — it keeps its own
+          separate, approval-gated creation flow. Switching just
+          changes which fields apply; nothing already filled in
+          (amenities, hours, etc.) is cleared, so switching back later
+          doesn't lose anything. */}
+      {business.type !== "MADE_IN_KENYA" && (
+        <div className="mb-4">
+          <span className="mb-1.5 block text-xs font-semibold text-warm-clay">Business Type</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setType("VENUE")}
+              className={`flex-1 rounded-full border py-2 text-sm font-semibold transition ${
+                type === "VENUE" ? "border-terracotta bg-terracotta text-white" : "border-border bg-cream text-text"
+              }`}
+            >
+              Venue
+            </button>
+            <button
+              type="button"
+              onClick={() => setType("EXPERIENCE_HOST")}
+              className={`flex-1 rounded-full border py-2 text-sm font-semibold transition ${
+                type === "EXPERIENCE_HOST" ? "border-terracotta bg-terracotta text-white" : "border-border bg-cream text-text"
+              }`}
+            >
+              Experience Host
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-warm-clay">Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
         </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-warm-clay">Reservation Policy</span>
-          <Select
-            value={reservationPolicy}
-            onChange={setReservationPolicy}
-            options={[{ value: "", label: "Not specified" }, ...RESERVATION_POLICY_OPTIONS]}
-            className="w-full"
-          />
-        </label>
+        {/* Val, Sep 2026: "No reservation policy, those will be on the
+            event card" — an Experience Host's per-event booking
+            details (paymentTiming, ticketingLink) already cover this;
+            a business-level reservation policy doesn't apply when
+            there's no single fixed venue to reserve at. */}
+        {type !== "EXPERIENCE_HOST" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-warm-clay">Reservation Policy</span>
+            <Select
+              value={reservationPolicy}
+              onChange={setReservationPolicy}
+              options={[{ value: "", label: "Not specified" }, ...RESERVATION_POLICY_OPTIONS]}
+              className="w-full"
+            />
+          </label>
+        )}
       </div>
 
       {/* Categories - Multi-select, collapsible (Val, Sep 2026) — same
@@ -637,12 +682,19 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           <span className="mb-1 block text-xs font-semibold text-warm-clay">Email</span>
           <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
         </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-semibold text-warm-clay">Address</span>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
-        </label>
+        {/* Val, Sep 2026: "No address, these will be on the event
+            card" — each experience already has its own location field;
+            a single business-level address doesn't apply when there's
+            no one fixed venue. */}
+        {type !== "EXPERIENCE_HOST" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-warm-clay">Address</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
+          </label>
+        )}
       </div>
 
+      {type !== "EXPERIENCE_HOST" && (
       <div className="mb-4">
         <span className="mb-1 block text-xs font-semibold text-warm-clay">Location on map</span>
         {latitude != null ? (
@@ -666,6 +718,7 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           </button>
         )}
       </div>
+      )}
 
       {mapOpen && (
         <LocationPickerModal
@@ -721,6 +774,12 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
         </label>
       </div>
 
+      {/* Val, Sep 2026: "there are things that should not be on
+          experience host UI like: amenities and opening hours" — both
+          are properties of a fixed venue, which an Experience Host
+          doesn't have. */}
+      {type !== "EXPERIENCE_HOST" && (
+      <>
       <div className="mb-5">
         <span className="mb-2 block text-xs font-semibold text-warm-clay">Amenities</span>
         <div className="flex flex-wrap gap-2">
@@ -781,6 +840,8 @@ function ProfileEditor({ business, onSaved }: { business: Business; onSaved: () 
           );
         })}
       </div>
+      </>
+      )}
 
       <button
         onClick={handleSave}
@@ -1048,8 +1109,21 @@ function ExperienceManager({
         </p>
       )}
 
+      {/* Val, Sep 2026: "opens a modal and ready to edit" — was an
+          inline-expanding form at the top of the list; same form,
+          same handlers, just presented as a real modal overlay now,
+          matching how ExperienceDetailModal/LocationPickerModal
+          already work elsewhere in this app. */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-5 space-y-3 rounded-2xl border border-border bg-cream p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(67,53,47,0.5)] p-4" onClick={(e) => e.target === e.currentTarget && (resetForm(), setShowForm(false))}>
+        <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-spotly bg-surface p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg text-warm-brown">{editingId ? (isEditingDraft ? "Edit draft" : "Edit experience") : "New experience"}</h3>
+          <button type="button" onClick={() => { resetForm(); setShowForm(false); }} className="text-warm-clay" aria-label="Close">
+            <i className="bi bi-x-lg" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Cover image */}
           <div>
             <span className="mb-1 block text-xs font-semibold text-warm-clay">Cover image</span>
@@ -1246,66 +1320,68 @@ function ExperienceManager({
               {busy ? "Saving…" : editingId ? (isEditingDraft ? "Publish" : "Save Experience") : "Publish Experience"}
             </button>
           </div>
+          {/* Val, Sep 2026: "they can choose to save, publish or
+              delete" — delete only makes sense once there's an actual
+              experience to delete, not while creating a new one. */}
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("Delete this experience? This can't be undone.")) {
+                  handleDelete(editingId);
+                  resetForm();
+                  setShowForm(false);
+                }
+              }}
+              className="w-full text-center text-sm font-semibold text-error"
+            >
+              Delete this experience
+            </button>
+          )}
         </form>
+        </div>
+        </div>
       )}
 
       {experiences.length === 0 ? (
         <p className="text-sm text-warm-clay">You haven&apos;t hosted an experience yet.</p>
       ) : (
-        <div className="space-y-2">
+        // Val, Sep 2026: "have event card just like the ones other
+        // users see" — the same cover-image-forward card shape as the
+        // public ExperienceCard, not a plain list of rows. Clicking
+        // the whole card opens the edit modal (openEdit already exists
+        // and now presents as a modal instead of an inline-expanding
+        // form — see showForm below); no separate edit/delete/publish
+        // icons cluttering the card itself, those live in the modal.
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {experiences.map((exp) => (
-            <div key={exp.id} className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm">
-              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-cream">
+            <button
+              key={exp.id}
+              onClick={() => openEdit(exp)}
+              className="overflow-hidden rounded-2xl border border-border bg-surface text-left transition hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(67,53,47,0.1)]"
+            >
+              <div className="relative aspect-square bg-cream">
                 {exp.images[0] && !brokenExpThumbs.has(exp.id) && (
                   <Image
                     src={exp.images[0]}
                     alt=""
                     fill
-                    sizes="48px"
+                    sizes="200px"
                     className="object-cover"
                     onError={() => setBrokenExpThumbs((prev) => new Set(prev).add(exp.id))}
                   />
                 )}
+                {exp.isDraft && (
+                  <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-terracotta">Draft</span>
+                )}
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{exp.title}</span>
-                  {exp.isDraft && (
-                    <span className="rounded-full bg-[rgba(199,101,58,0.1)] px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-terracotta">Draft</span>
-                  )}
-                </div>
-                <div className="text-xs text-warm-clay">
+              <div className="p-2.5">
+                <p className="truncate text-sm font-semibold text-warm-brown">{exp.title}</p>
+                <p className="text-xs text-warm-clay">
                   {exp.startsAt ? new Date(exp.startsAt).toLocaleDateString() : "No date set"} · {exp.isDraft ? "Not published" : exp.isExpired ? "Past" : "Upcoming"}
-                </div>
+                </p>
               </div>
-              {exp.isDraft ? (
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(exp)} className="p-1.5 text-warm-clay hover:text-terracotta" aria-label="Edit">
-                    <i className="bi bi-pencil" />
-                  </button>
-                  <button
-                    onClick={() => api.experiences.publishDraft(businessId, exp.id).then(onChanged).catch((err) => showToast(err instanceof ApiError ? err.message : "Couldn't publish that yet."))}
-                    className="rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white"
-                  >
-                    Publish
-                  </button>
-                  <button onClick={() => handleDelete(exp.id)} className="p-1.5 text-error" aria-label="Delete">
-                    <i className="bi bi-trash" />
-                  </button>
-                </div>
-              ) : (
-                !exp.isExpired && (
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(exp)} className="p-1.5 text-warm-clay hover:text-terracotta" aria-label="Edit">
-                      <i className="bi bi-pencil" />
-                    </button>
-                    <button onClick={() => handleDelete(exp.id)} className="p-1.5 text-error" aria-label="Delete">
-                      <i className="bi bi-trash" />
-                    </button>
-                  </div>
-                )
-              )}
-            </div>
+            </button>
           ))}
         </div>
       )}

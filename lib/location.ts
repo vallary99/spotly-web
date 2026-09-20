@@ -48,6 +48,24 @@ export function distanceKm(a: { latitude: number; longitude: number }, b: { lati
 // with a plain-language reason (permission denied, unsupported, or
 // timed out) rather than the raw GeolocationPositionError shape, so
 // callers can show it directly.
+// Val, Sep 2026: "let them pick a city which should default to their
+// current location." Resolves the browser's geolocation to a city
+// name via the backend's reverse-geocode proxy (same Nominatim-via-
+// server reasoning as geocodeAddress above). Returns null on
+// permission denial, an unresolvable location, or any failure — the
+// caller already falls back to Nairobi in that case.
+export async function detectCurrentCity(): Promise<string | null> {
+  try {
+    const { latitude, longitude } = await getCurrentPosition();
+    const res = await fetch(`${API_URL}/businesses/reverse-geocode?lat=${latitude}&lon=${longitude}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    return result?.city ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function getCurrentPosition(): Promise<{ latitude: number; longitude: number }> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {

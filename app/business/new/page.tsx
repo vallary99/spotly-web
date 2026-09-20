@@ -9,7 +9,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useToast } from "@/components/ToastContext";
 import { api, ApiError } from "@/lib/api";
 import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
-import { geocodeAddress } from "@/lib/location";
+import { geocodeAddress, detectCurrentCity } from "@/lib/location";
 import { Select } from "@/components/Select";
 
 // Leaflet touches `window` at import time, so it can never render
@@ -125,6 +125,19 @@ export default function NewBusinessPage() {
   const [maxCategories, setMaxCategories] = useState(MAX_CATEGORIES_FALLBACK);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Val, Sep 2026: "let them pick a city which should default to their
+  // current location, and for this case, Nairobi." Best-effort and
+  // silent — a denied permission or unresolvable location just leaves
+  // the existing CITIES[0] (Nairobi) default in place, never blocks or
+  // shows an error for something this incidental. Currently a no-op in
+  // practice (CITIES has only one entry today) but resolves correctly
+  // once more cities launch.
+  useEffect(() => {
+    detectCurrentCity().then((detected) => {
+      if (detected && CITIES.includes(detected)) setCity(detected);
+    });
+  }, []);
 
   useEffect(() => {
     api.businesses
