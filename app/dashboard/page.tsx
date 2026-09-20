@@ -376,7 +376,13 @@ function hasApprovedPhoto(business: Business): boolean {
 // separate PENDING-approval banner elsewhere, so isn't duplicated here.
 function isDiscoverable(business: Business, hostingHistory: Experience[]): boolean {
   if (business.type === "EXPERIENCE_HOST") {
-    return hostingHistory.some((e) => e.images && e.images.length > 0);
+    // Matches BusinessService.applyListingFilters exactly (Val, Sep
+    // 2026: "they don't have to upload photos") — this used to also
+    // require a photo on the experience itself, which was the OLD
+    // backend rule; it was never updated here when that requirement
+    // was dropped, so this kept showing the banner for an Experience
+    // Host who'd already published a real (non-draft) experience.
+    return hostingHistory.some((e) => !e.isDraft);
   }
   return hasApprovedPhoto(business);
 }
