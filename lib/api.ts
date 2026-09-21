@@ -168,6 +168,8 @@ export interface Media {
   type: "PHOTO" | "VIDEO";
   url: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
+  focalX?: number | null;
+  focalY?: number | null;
 }
 
 export interface ProductImage {
@@ -234,6 +236,7 @@ export interface Experience {
   instructions?: string | null;
   isExpired: boolean;
   isDraft: boolean;
+  imageFocalPoints?: Record<string, { x: number; y: number }> | null;
 }
 
 export interface ReviewSummary {
@@ -454,6 +457,8 @@ export const api = {
       request<Media>(`/businesses/${businessId}/media/confirm-video`, { method: "POST", body: JSON.stringify(dto) }),
     remove: (businessId: string, mediaId: string) =>
       request(`/businesses/${businessId}/media/${mediaId}`, { method: "DELETE" }),
+    setFocalPoint: (businessId: string, mediaId: string, x: number, y: number) =>
+      request<Media>(`/businesses/${businessId}/media/${mediaId}/focal-point`, { method: "PUT", body: JSON.stringify({ x, y }) }),
   },
   products: {
     // Public — no businessId scoping needed, this is the shareable

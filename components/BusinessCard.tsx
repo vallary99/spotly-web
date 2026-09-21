@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { ApiError, type Business } from "@/lib/api";
-import { resolveBusinessPhotoUrl } from "@/lib/placeholders";
+import { resolveBusinessPhoto } from "@/lib/placeholders";
 import { computeOpenStatus } from "@/lib/hours";
 import { businessHref } from "@/lib/urls";
 import { useAuth } from "./AuthContext";
@@ -21,7 +21,8 @@ export function BusinessCard({ business }: { business: Business }) {
   const { isSaved, toggleSave } = useBookmarks();
   const saved = isSaved({ businessId: business.id });
   const [busy, setBusy] = useState(false);
-  const photoUrl = resolveBusinessPhotoUrl(business.media);
+  const photo = resolveBusinessPhoto(business.media);
+  const photoUrl = photo?.url ?? null;
   // No stock-photo fallback anymore — a business with no real photo, or
   // whose real photo fails to load, shows a plain blank card instead of
   // any placeholder imagery. A visibly-broken or mismatched fallback
@@ -79,6 +80,7 @@ export function BusinessCard({ business }: { business: Business }) {
               sizes="268px"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgErrored(true)}
+              style={{ objectPosition: `${photo?.focalX ?? 50}% ${photo?.focalY ?? 50}%` }}
               className={`object-cover transition duration-[400ms] group-hover:scale-[1.06] ${
                 imgLoaded ? "opacity-100" : "opacity-0"
               }`}

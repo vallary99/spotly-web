@@ -100,6 +100,7 @@ export function ExperienceCard({ experience, autoOpen }: { experience: Experienc
               fill
               sizes="268px"
               onError={() => setImgErrored(true)}
+              style={{ objectPosition: `${experience.imageFocalPoints?.[img]?.x ?? 50}% ${experience.imageFocalPoints?.[img]?.y ?? 50}%` }}
               className={`object-cover transition duration-[400ms] ${isPast ? "grayscale" : "group-hover:scale-[1.06]"}`}
             />
           )}

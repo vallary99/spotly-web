@@ -15,6 +15,7 @@ import { Lightbox } from "@/components/Lightbox";
 import { DashboardGallery } from "@/components/DashboardGallery";
 import { DashboardProducts } from "@/components/DashboardProducts";
 import { OfferManager } from "@/components/OfferManager";
+import { ImageRepositioner } from "@/components/ImageRepositioner";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
@@ -892,6 +893,14 @@ function ExperienceManager({
   const [budgetMin, setBudgetMin] = useState("");
   const [budgetMax, setBudgetMax] = useState("");
   const [coverImage, setCoverImage] = useState<string | null>(null);
+  // Val, Sep 2026: "allow user to move the images they upload to be
+  // used on... event cover." Kept per-image (imageFocalPoints is a
+  // url->{x,y} map) since a draft could technically end up with more
+  // than one image later, even though only the single cover image is
+  // actually editable in this form today.
+  const [coverFocalX, setCoverFocalX] = useState(50);
+  const [coverFocalY, setCoverFocalY] = useState(50);
+  const [repositioningCover, setRepositioningCover] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -925,6 +934,8 @@ function ExperienceManager({
     setBudgetMin("");
     setBudgetMax("");
     setCoverImage(null);
+    setCoverFocalX(50);
+    setCoverFocalY(50);
     setError(null);
   };
 
@@ -953,6 +964,9 @@ function ExperienceManager({
     setBudgetMin(inherited ? "" : exp.budgetMin != null ? String(exp.budgetMin) : "");
     setBudgetMax(inherited ? "" : exp.budgetMax != null ? String(exp.budgetMax) : "");
     setCoverImage(exp.images[0] || null);
+    const savedFocal = exp.images[0] ? exp.imageFocalPoints?.[exp.images[0]] : undefined;
+    setCoverFocalX(savedFocal?.x ?? 50);
+    setCoverFocalY(savedFocal?.y ?? 50);
     setUnlimitedCapacity(exp.capacity == null);
     setCapacity(exp.capacity != null ? String(exp.capacity) : "");
     setPaymentTiming(exp.paymentTiming ?? "AT_VENUE");
@@ -966,6 +980,10 @@ function ExperienceManager({
     try {
       const { url } = await api.experiences.uploadCoverImage(businessId, file);
       setCoverImage(url);
+      // A brand new image has no prior focal point of its own to
+      // inherit — start it centered, same as any fresh upload.
+      setCoverFocalX(50);
+      setCoverFocalY(50);
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Couldn't upload that image.");
     } finally {
@@ -1009,6 +1027,7 @@ function ExperienceManager({
       capacity: unlimitedCapacity ? null : capacity ? Number(capacity) : undefined,
       paymentTiming,
       instructions: instructions.trim() || undefined,
+      imageFocalPoints: coverImage ? { [coverImage]: { x: coverFocalX, y: coverFocalY } } : undefined,
     };
     try {
       if (editingId) {
@@ -1056,6 +1075,7 @@ function ExperienceManager({
       capacity: unlimitedCapacity ? undefined : capacity ? Number(capacity) : undefined,
       paymentTiming,
       instructions: instructions.trim() || undefined,
+      imageFocalPoints: coverImage ? { [coverImage]: { x: coverFocalX, y: coverFocalY } } : undefined,
     };
     try {
       if (editingId) {
@@ -1129,7 +1149,15 @@ function ExperienceManager({
             <span className="mb-1 block text-xs font-semibold text-warm-clay">Cover image</span>
             {coverImage ? (
               <div className="relative mb-2 h-36 w-full overflow-hidden rounded-xl">
-                <Image src={coverImage} alt="" fill sizes="400px" className="object-cover" />
+                <Image src={coverImage} alt="" fill sizes="400px" className="object-cover" style={{ objectPosition: `${coverFocalX}% ${coverFocalY}%` }} />
+                <button
+                  type="button"
+                  onClick={() => setRepositioningCover(true)}
+                  className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-olive"
+                  aria-label="Reposition"
+                >
+                  <i className="bi bi-arrows-move text-xs" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setCoverImage(null)}
@@ -1343,6 +1371,23 @@ function ExperienceManager({
         </div>
       )}
 
+      {/* Val, Sep 2026: "move the images they upload to be used on...
+          event cover." 16/9 approximates ExperienceCard's own cover
+          treatment reasonably well. */}
+      {repositioningCover && coverImage && (
+        <ImageRepositioner
+          imageUrl={coverImage}
+          aspectRatio="16/9"
+          initialX={coverFocalX}
+          initialY={coverFocalY}
+          onClose={() => setRepositioningCover(false)}
+          onSave={async (x, y) => {
+            setCoverFocalX(x);
+            setCoverFocalY(y);
+          }}
+        />
+      )}
+
       {experiences.length === 0 ? (
         <p className="text-sm text-warm-clay">You haven&apos;t hosted an experience yet.</p>
       ) : (
@@ -1367,6 +1412,7 @@ function ExperienceManager({
                     alt=""
                     fill
                     sizes="200px"
+                    style={{ objectPosition: `${exp.imageFocalPoints?.[exp.images[0]]?.x ?? 50}% ${exp.imageFocalPoints?.[exp.images[0]]?.y ?? 50}%` }}
                     className="object-cover"
                     onError={() => setBrokenExpThumbs((prev) => new Set(prev).add(exp.id))}
                   />

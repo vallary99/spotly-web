@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { api, ApiError, type Media } from "@/lib/api";
 import { useToast } from "./ToastContext";
 import { Lightbox } from "./Lightbox";
+import { ImageRepositioner } from "./ImageRepositioner";
 
 const LONG_PRESS_MS = 500;
 
@@ -52,6 +53,7 @@ export function DashboardGallery({
   // two are mutually exclusive interactions on the same tile (short
   // press views, long press manages).
   const [menuFor, setMenuFor] = useState<Media | null>(null);
+  const [repositioning, setRepositioning] = useState<Media | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
   const photos = media.filter((m) => m.type === "PHOTO" && m.status === "APPROVED");
@@ -325,6 +327,24 @@ export function DashboardGallery({
                   <span className="text-sm font-semibold text-text">Use as cover photo</span>
                 </button>
               )}
+              {/* Val, Sep 2026: "allow user to move the images they
+                  upload to be used on business cover... not just
+                  having a default crop line." Offered on any photo,
+                  not only the current cover — the focal point is saved
+                  per photo regardless of which one is the cover right
+                  now. */}
+              {menuFor.type === "PHOTO" && (
+                <button
+                  onClick={() => { setRepositioning(menuFor); setMenuFor(null); }}
+                  disabled={actionBusy}
+                  className="flex w-full items-center gap-3 border-b border-border px-4 py-3.5 text-left transition active:bg-cream disabled:opacity-60"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(93,96,65,0.12)] text-olive">
+                    <i className="bi bi-arrows-move text-sm" />
+                  </span>
+                  <span className="text-sm font-semibold text-text">Reposition</span>
+                </button>
+              )}
               <button
                 onClick={() => handleDelete(menuFor)}
                 disabled={actionBusy}
@@ -345,6 +365,31 @@ export function DashboardGallery({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Val, Sep 2026: "allow user to move the images they upload...
+          so it can fit and show what they prioritize most." 4/3 here
+          is an approximation — the cover photo actually shows at
+          several different ratios across the app (BusinessCard, the
+          detail page hero), so this can't match every one exactly, but
+          gives a reasonable sense of what a center-weighted crop will
+          keep. */}
+      {repositioning && (
+        <ImageRepositioner
+          imageUrl={repositioning.url}
+          aspectRatio="4/3"
+          initialX={repositioning.focalX ?? 50}
+          initialY={repositioning.focalY ?? 50}
+          onClose={() => setRepositioning(null)}
+          onSave={async (x, y) => {
+            try {
+              await api.media.setFocalPoint(businessId, repositioning.id, x, y);
+              onChanged();
+            } catch (err) {
+              showToast(err instanceof ApiError ? err.message : "Couldn't save that position.");
+            }
+          }}
+        />
       )}
     </div>
   );

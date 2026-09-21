@@ -67,6 +67,7 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
               alt={experience.title}
               fill
               sizes="512px"
+              style={{ objectPosition: `${experience.imageFocalPoints?.[experience.images[0]]?.x ?? 50}% ${experience.imageFocalPoints?.[experience.images[0]]?.y ?? 50}%` }}
               className="object-cover"
               onError={() => setImgErrored(true)}
             />

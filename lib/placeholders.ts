@@ -58,6 +58,20 @@ export function resolveBusinessPhotoUrl(media?: { url: string; status: string; t
   return approved ? approved.url : null;
 }
 
+// Same lookup as resolveBusinessPhotoUrl, but returns the focal point
+// too (Val, Sep 2026: "move the images they upload to be used on
+// business cover... so it can fit and show what they prioritize
+// most"). A separate function rather than changing
+// resolveBusinessPhotoUrl's return shape, since most of its callers
+// (metadata/OG image generation) only ever needed a bare URL and
+// don't care about crop positioning.
+export function resolveBusinessPhoto(
+  media?: { url: string; status: string; type?: string; focalX?: number | null; focalY?: number | null }[],
+): { url: string; focalX: number; focalY: number } | null {
+  const approved = media?.find((m) => m.status === "APPROVED" && (!m.type || m.type === "PHOTO") && isAllowedImageUrl(m.url));
+  return approved ? { url: approved.url, focalX: approved.focalX ?? 50, focalY: approved.focalY ?? 50 } : null;
+}
+
 // Reverted to the original set per explicit instruction — the
 // African-representation replacement from the prior round read as
 // blending less well with the gradient/text-legibility treatment over
