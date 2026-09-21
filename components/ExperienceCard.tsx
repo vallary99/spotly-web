@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Experience } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "./AuthContext";
@@ -21,8 +21,34 @@ import { ExperienceDetailModal } from "./ExperienceDetailModal";
 // detail popup a live event gets. This is what "Past Events" sections
 // use directly; the same component, just automatically inert once its
 // own date has passed.
-export function ExperienceCard({ experience, autoOpen }: { experience: Experience; autoOpen?: boolean }) {
-  const { authed, openAuthModal } = useAuth();
+export function ExperienceCard({
+  experience,
+  autoOpen,
+  onClick,
+}: {
+  experience: Experience;
+  autoOpen?: boolean;
+  // Val, Sep 2026: "experience card on the dashboard should just be
+  // the same one on the profile." The dashboard reuses this exact
+  // component but needs clicking it to open an editable modal instead
+  // of the normal read-only detail view — this override replaces that
+  // default behavior entirely rather than running alongside it.
+  onClick?: () => void;
+}) {
+  const { authed, openAuthModal, businessId } = useAuth();
+  // Val, Sep 2026: "a host should not be able to favorite their own
+  // events." AuthContext already exposes the logged-in user's own
+  // business id directly (decoded from their JWT), so this needs no
+  // new data on Experience itself — just a direct comparison. Gated on
+  // `mounted` for the same hydration reason as the business page's own
+  // "this is your business" badge: AuthContext reads localStorage
+  // synchronously, so an already-logged-in host's very first client
+  // render would otherwise already know they own this event while the
+  // server (no localStorage) never could, and the two have to match
+  // exactly on first render.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isOwnEvent = mounted && businessId === experience.businessId;
   const { showToast } = useToast();
   const { isSaved, toggleSave } = useBookmarks();
   const saved = isSaved({ experienceId: experience.id });
@@ -69,7 +95,7 @@ export function ExperienceCard({ experience, autoOpen }: { experience: Experienc
       <div
         role={isPast ? undefined : "button"}
         tabIndex={isPast ? undefined : 0}
-        onClick={isPast ? undefined : () => setDetailOpen(true)}
+        onClick={isPast ? undefined : onClick ?? (() => setDetailOpen(true))}
         onKeyDown={
           isPast
             ? undefined
@@ -84,7 +110,7 @@ export function ExperienceCard({ experience, autoOpen }: { experience: Experienc
                 // real hydration error, not a hypothetical one).
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  setDetailOpen(true);
+                  (onClick ?? (() => setDetailOpen(true)))();
                 }
               }
         }
@@ -106,9 +132,9 @@ export function ExperienceCard({ experience, autoOpen }: { experience: Experienc
           )}
           <span className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-white/92 px-2.5 py-1 text-xs font-semibold text-terracotta">
             <i className="bi bi-calendar-event" />
-            {dateLabel}
+            {experience.isDraft ? "Draft" : dateLabel}
           </span>
-          {!isPast && (
+          {!isPast && !isOwnEvent && (
             <button
               disabled={busy}
               onClick={handleBookmark}

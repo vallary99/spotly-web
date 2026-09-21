@@ -16,6 +16,7 @@ import { DashboardGallery } from "@/components/DashboardGallery";
 import { DashboardProducts } from "@/components/DashboardProducts";
 import { OfferManager } from "@/components/OfferManager";
 import { ImageRepositioner } from "@/components/ImageRepositioner";
+import { ExperienceCard } from "@/components/ExperienceCard";
 import { normalizeKenyanMsisdn } from "@/lib/phone";
 import { DashboardSkeleton } from "@/components/Skeleton";
 
@@ -904,7 +905,6 @@ function ExperienceManager({
   const [uploadingCover, setUploadingCover] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [brokenExpThumbs, setBrokenExpThumbs] = useState<Set<string>>(new Set());
 
   const live = experiences.filter((e) => !e.isExpired);
   const cap = tiers?.[tier]?.concurrentExperiences;
@@ -1391,43 +1391,18 @@ function ExperienceManager({
       {experiences.length === 0 ? (
         <p className="text-sm text-warm-clay">You haven&apos;t hosted an experience yet.</p>
       ) : (
-        // Val, Sep 2026: "have event card just like the ones other
-        // users see" — the same cover-image-forward card shape as the
-        // public ExperienceCard, not a plain list of rows. Clicking
-        // the whole card opens the edit modal (openEdit already exists
-        // and now presents as a modal instead of an inline-expanding
-        // form — see showForm below); no separate edit/delete/publish
-        // icons cluttering the card itself, those live in the modal.
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        // Val, Sep 2026: "experience card on the dashboard should just
+        // be the same one on the profile" — the actual public
+        // ExperienceCard, not a separate lookalike. Its onClick
+        // override opens the edit modal instead of the normal
+        // read-only detail view (openEdit already exists and now
+        // presents as a modal instead of an inline-expanding form —
+        // see showForm below); the save/heart button is already
+        // hidden for the owner's own events by ExperienceCard's own
+        // isOwnEvent check, so nothing extra needed for that here.
+        <div className="flex flex-wrap gap-4">
           {experiences.map((exp) => (
-            <button
-              key={exp.id}
-              onClick={() => openEdit(exp)}
-              className="overflow-hidden rounded-2xl border border-border bg-surface text-left transition hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(67,53,47,0.1)]"
-            >
-              <div className="relative aspect-square bg-cream">
-                {exp.images[0] && !brokenExpThumbs.has(exp.id) && (
-                  <Image
-                    src={exp.images[0]}
-                    alt=""
-                    fill
-                    sizes="200px"
-                    style={{ objectPosition: `${exp.imageFocalPoints?.[exp.images[0]]?.x ?? 50}% ${exp.imageFocalPoints?.[exp.images[0]]?.y ?? 50}%` }}
-                    className="object-cover"
-                    onError={() => setBrokenExpThumbs((prev) => new Set(prev).add(exp.id))}
-                  />
-                )}
-                {exp.isDraft && (
-                  <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-terracotta">Draft</span>
-                )}
-              </div>
-              <div className="p-2.5">
-                <p className="truncate text-sm font-semibold text-warm-brown">{exp.title}</p>
-                <p className="text-xs text-warm-clay">
-                  {exp.startsAt ? new Date(exp.startsAt).toLocaleDateString() : "No date set"} · {exp.isDraft ? "Not published" : exp.isExpired ? "Past" : "Upcoming"}
-                </p>
-              </div>
-            </button>
+            <ExperienceCard key={exp.id} experience={exp} onClick={() => openEdit(exp)} />
           ))}
         </div>
       )}

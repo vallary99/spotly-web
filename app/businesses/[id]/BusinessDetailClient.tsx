@@ -158,7 +158,10 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
     .filter((m) => m.status === "APPROVED" && (m.type === "VIDEO" || (m.type === "PHOTO" && isAllowedImageUrl(m.url))))
     .map((m) => ({ url: m.url, type: m.type as "PHOTO" | "VIDEO" }));
   const upcomingExperiences = experienceHistory.filter((e) => !e.isExpired);
-  const pastExperiences = experienceHistory.filter((e) => e.isExpired);
+  // Val, Sep 2026: "event hosts profiles should only have upcoming
+  // events, they can always upload recaps on the gallery" — the
+  // dedicated Past Events tab this used to feed is gone; past
+  // experiences are no longer shown on the public profile at all.
 
   const handleSave = async () => {
     if (!authed) return openAuthModal(handleSave);
@@ -626,37 +629,13 @@ export default function BusinessDetailClient({ id, initialBusiness }: { id: stri
                   <i className="bi bi-bag mr-1.5" /> Catalogue
                 </button>
               )}
-              {/* Promoted out of the About tab into its own, same level
-                  as Gallery (Val, Sep 2026) — only shown once there's
-                  something to show, same as Catalogue above. */}
-              {pastExperiences.length > 0 && (
-                <button
-                  onClick={() => setActiveTab("past-events")}
-                  className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                    activeTab === "past-events" ? "border-terracotta text-terracotta" : "border-transparent text-warm-clay hover:text-text"
-                  }`}
-                >
-                  <i className="bi bi-clock-history mr-1.5" /> Past Events
-                </button>
-              )}
             </div>
             <div className="px-11 pt-6 max-md:px-4">
               {activeTab === "catalogue" && (
                 <CatalogueSection businessId={business.id} businessPath={businessHref(business)} autoOpenProductId={deepLinkedProductId} />
               )}
-              {/* Just cards, no header/wrapper card the way it had one
-                  nested inside the About tab — this IS the tab now, so
-                  it doesn't need its own boxed section inside another
-                  page (Val, Sep 2026: "just cards"). */}
-              {activeTab === "past-events" && (
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-                  {pastExperiences.map((e) => (
-                    <ExperienceCard key={e.id} experience={{ ...e, businessName: business.name, businessSlug: business.slug, businessCity: business.city }} autoOpen={e.id === deepLinkedExperienceId} />
-                  ))}
-                </div>
-              )}
             </div>
-            {activeTab !== "catalogue" && activeTab !== "past-events" && (
+            {activeTab !== "catalogue" && (
               <div className="pt-6">{activeTab === "photos" ? galleryBlock : aboutContentBlock}</div>
             )}
           </>
