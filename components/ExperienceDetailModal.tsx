@@ -25,8 +25,12 @@ export function ExperienceDetailModal({ experience, onClose }: { experience: Exp
   // into the hosting business's own page, with ?experience= telling
   // BusinessDetailClient/ExperienceCard to auto-open this exact one.
   const handleShare = async () => {
-    const path = businessHref({ id: experience.businessId, slug: experience.businessSlug, city: experience.businessCity });
-    const url = `${window.location.origin}${path}?experience=${experience.id}`;
+    // Val, Sep 2026: "open the modal of the event, on either the home
+    // page of businesses page. Home page preferably" — the homepage
+    // reads ?experience= and auto-opens this exact event's modal
+    // (browsing itself stays fully open either way; auth still only
+    // kicks in on save/review/list, same as everywhere else).
+    const url = `${window.location.origin}/?experience=${experience.id}`;
     api.businesses.recordShare(experience.businessId);
     if (navigator.share) {
       navigator.share({ title: experience.title, url }).catch(() => {});

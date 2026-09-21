@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -9,10 +10,11 @@ import { BusinessCard } from "@/components/BusinessCard";
 import { businessHref } from "@/lib/urls";
 import { BusinessCardRowSkeleton } from "@/components/Skeleton";
 import { ExperienceCard } from "@/components/ExperienceCard";
+import { ExperienceDetailModal } from "@/components/ExperienceDetailModal";
 import { OfferCard } from "@/components/OfferCard";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/ToastContext";
-import { api, type HomeResponse, type Business } from "@/lib/api";
+import { api, type HomeResponse, type Business, type Experience } from "@/lib/api";
 import { HERO_IMAGES } from "@/lib/placeholders";
 import { computeOpenStatus } from "@/lib/hours";
 import { CITIES, LOCATIONS_BY_CITY } from "@/lib/locations";
@@ -84,6 +86,27 @@ function sortByNearby(list: Business[], userLocation: { latitude: number; longit
     .map((b) => ({ business: b, km: distanceKm(userLocation, { latitude: b.latitude, longitude: b.longitude }) }))
     .sort((a, b) => a.km - b.km)
     .map((entry) => entry.business);
+}
+
+// Val, Sep 2026: "the link should take them to the exact thing that
+// was shared... open the modal of the event, on the home page
+// preferably." Fetched directly by id rather than relying on the
+// shared event happening to be one of the rail's own top 10 — it
+// usually won't be. Browsing itself stays fully open; this doesn't
+// gate anything, it just gets someone straight to what was shared.
+// A separate component (not inline in HomePage) because useSearchParams
+// requires its own Suspense boundary, which only needs to wrap this
+// small piece, not the whole page.
+function SharedExperienceModal() {
+  const searchParams = useSearchParams();
+  const [experience, setExperience] = useState<Experience | null>(null);
+  useEffect(() => {
+    const id = searchParams.get("experience");
+    if (!id) return;
+    api.experiences.getOne(id).then(setExperience).catch(() => {});
+  }, [searchParams]);
+  if (!experience) return null;
+  return <ExperienceDetailModal experience={experience} onClose={() => setExperience(null)} />;
 }
 
 export default function HomePage() {
@@ -482,6 +505,10 @@ export default function HomePage() {
 
       <div className="h-10" />
       <Footer />
+
+      <Suspense fallback={null}>
+        <SharedExperienceModal />
+      </Suspense>
     </>
   );
 }

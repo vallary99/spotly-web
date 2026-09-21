@@ -370,6 +370,9 @@ export const api = {
       const qs = new URLSearchParams(params as Record<string, string>).toString();
       return request<Experience[]>(`/experiences${qs ? `?${qs}` : ""}`, { auth: false });
     },
+    // Public — powers a shared event link (Val, Sep 2026: "the link
+    // should take them to the exact thing that was shared").
+    getOne: (id: string) => request<Experience>(`/experiences/${id}`, { auth: false }),
     create: (businessId: string, dto: Record<string, unknown>) =>
       request<Experience>(`/businesses/${businessId}/experiences`, { method: "POST", body: JSON.stringify(dto) }),
     saveDraft: (businessId: string, dto: Record<string, unknown>) =>
